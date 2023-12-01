@@ -51,6 +51,19 @@ toDigit text i =
     start = Text.drop i text
     find (cases (name, _) -> starts text i name 0) digitNames |> Optional.map at2
 
+search: Text -> Boolean -> Nat
+search text inc = 
+    n = Text.size text
+    f = if inc then x -> (x + 1) else x -> (x - 1)
+    start = if inc then 0 else (n - 1)
+    go i = match toDigit text i with 
+        None | inc && Nat.eq i (n - 1) -> 0
+             | not inc && Nat.eq i 0 -> 0
+        None      -> go (f i)
+        Some d -> d
+    go start
+    
+
 firstLast: Text -> (Nat, Nat)
 firstLast text = 
     n = Text.size text
@@ -75,5 +88,6 @@ firstLast text =
 
 calibrationValue2 : Text -> {IO, Exception} Nat
 calibrationValue2 text = 
-    (first, last) = firstLast text
+    first = search text true
+    last  = search text false
     first * 10 + last
