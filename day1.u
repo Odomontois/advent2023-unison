@@ -1,18 +1,28 @@
 sample = FilePath "day1/sampleInput.txt"
 
+sample2 = FilePath "day1/sampleInput2.txt"
+
 fullInput = FilePath "day1/input.txt"
 
 p1 file = 
     x = readFileUtf8 file
-    numbers x
+    numbers calibrationValue x
 
-samplep1 : '{IO, Exception} Nat
+p2 file =
+    x = readFileUtf8 file
+    numbers calibrationValue2 x
+
 samplep1 _ = p1 sample
 
-fullp1 : '{IO, Exception} Nat
+
+
 fullp1 _ = p1 fullInput
 
-numbers text = Text.lines text |> List.filter (not << Text.isEmpty) |> List.map calibrationValue |> List.foldLeft (+) 0
+fullp2 _ = p2 fullInput
+
+samplep2 _ = p2 sample2
+
+numbers cb text = Text.lines text |> List.filter (not << Text.isEmpty) |> List.map cb |> List.foldLeft (+) 0
 
 calibrationValue : Text -> {IO, Exception} Nat
 calibrationValue text = 
@@ -20,5 +30,26 @@ calibrationValue text =
     first = List.head digits |> Optional.toList
     last = List.last digits |> Optional.toList
     full = fromTextOrFail <| fromCharList (first ++ last)
+    full
+
+digitNames = 
+    List.zip (toCharList "0123456789" |> List.map Char.toText) (List.range 0 10) ++
+    List.zip ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"] (List.range 0 10)
+
+starts : Text -> [Char] -> Boolean
+starts prefix text = 
+    prefix == (fromCharList <| List.take (Text.size prefix) text)
+
+
+toDigit: [Char] -> Optional Nat
+toDigit s = 
+    find (cases (name, i) -> starts name s) digitNames |> Optional.map at2
+
+calibrationValue2 : Text -> {IO, Exception} Nat
+calibrationValue2 text = 
+    digits = toCharList text |> List.tails |> List.filterMap toDigit
+    first = List.head digits |> Optional.getOrElse 0
+    last = List.last digits |> Optional.getOrElse 0
+    full = first * 10 + last
     full
 
