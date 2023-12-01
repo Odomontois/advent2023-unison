@@ -63,28 +63,11 @@ search text inc =
         Some d -> d
     go start
     
-
-firstLast: Text -> (Nat, Nat)
-firstLast text = 
-    n = Text.size text
-    
-    start i = 
-        if i == n then (0, 0) else match toDigit text i with 
-            None -> start (i + 1)
-            Some d -> continue d d (i + 1)
-
-    continue first last i = 
-        if i == n then (first, last) else match toDigit text i with 
-            None -> continue first last (i + 1)
-            Some d -> continue first d (i + 1)
-
-    start 0 
     
 
 > toDigit "twone" 0
 > toDigit "twone" 1
 > toDigit "twone" 2
-> firstLast "twonesix"
 
 calibrationValue2 : Text -> {IO, Exception} Nat
 calibrationValue2 text = 
