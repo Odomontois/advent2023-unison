@@ -22,7 +22,7 @@ fullp2 _ = p2 fullInput
 
 samplep2 _ = p2 sample2
 
-numbers cb text = Text.lines text |> List.filter (not << Text.isEmpty) |> List.map cb |> List.foldLeft (+) 0
+numbers cb text = Text.lines text |> List.filter (not << Text.isEmpty) |> List.map cb  |> List.foldLeft (+) 0
 
 calibrationValue : Text -> {IO, Exception} Nat
 calibrationValue text = 
@@ -32,24 +32,48 @@ calibrationValue text =
     full = fromTextOrFail <| fromCharList (first ++ last)
     full
 
+digitNames : [(Text, Nat)]
 digitNames = 
     List.zip (toCharList "0123456789" |> List.map Char.toText) (List.range 0 10) ++
     List.zip ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"] (List.range 0 10)
 
-starts : Text -> [Char] -> Boolean
-starts prefix text = 
-    prefix == (fromCharList <| List.take (Text.size prefix) text)
 
+starts : Text -> Nat -> Text -> Nat-> Boolean
+starts text i pat j = 
+    match charAt j pat with 
+        None -> true
+        Some c2 ->  match charAt i text with 
+            None -> false
+            Some c -> Char.eq c c2 && starts text (i + 1) pat (j + 1)
 
-toDigit: [Char] -> Optional Nat
-toDigit s = 
-    find (cases (name, i) -> starts name s) digitNames |> Optional.map at2
+toDigit: Text -> Nat -> Optional Nat
+toDigit text i = 
+    start = Text.drop i text
+    find (cases (name, _) -> starts text i name 0) digitNames |> Optional.map at2
+
+firstLast: Text -> (Nat, Nat)
+firstLast text = 
+    n = Text.size text
+    
+    start i = 
+        if i == n then (0, 0) else match toDigit text i with 
+            None -> start (i + 1)
+            Some d -> continue d d (i + 1)
+
+    continue first last i = 
+        if i == n then (first, last) else match toDigit text i with 
+            None -> continue first last (i + 1)
+            Some d -> continue first d (i + 1)
+
+    start 0 
+    
+
+> toDigit "twone" 0
+> toDigit "twone" 1
+> toDigit "twone" 2
+> firstLast "twonesix"
 
 calibrationValue2 : Text -> {IO, Exception} Nat
 calibrationValue2 text = 
-    digits = toCharList text |> List.tails |> List.filterMap toDigit
-    first = List.head digits |> Optional.getOrElse 0
-    last = List.last digits |> Optional.getOrElse 0
-    full = first * 10 + last
-    full
-
+    (first, last) = firstLast text
+    first * 10 + last
