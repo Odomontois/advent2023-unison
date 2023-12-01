@@ -1,0 +1,24 @@
+sample = FilePath "day1/sampleInput.txt"
+
+fullInput = FilePath "day1/input.txt"
+
+p1 file = 
+    x = readFileUtf8 file
+    numbers x
+
+samplep1 : '{IO, Exception} Nat
+samplep1 _ = p1 sample
+
+fullp1 : '{IO, Exception} Nat
+fullp1 _ = p1 fullInput
+
+numbers text = Text.lines text |> List.filter (not << Text.isEmpty) |> List.map calibrationValue |> List.foldLeft (+) 0
+
+calibrationValue : Text -> {IO, Exception} Nat
+calibrationValue text = 
+    digits = toCharList text |> List.filter (isDigit)
+    first = List.head digits |> Optional.toList
+    last = List.last digits |> Optional.toList
+    full = fromTextOrFail <| fromCharList (first ++ last)
+    full
+
