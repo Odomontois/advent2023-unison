@@ -74,3 +74,10 @@ calibrationValue2 text =
     first = search text true
     last  = search text false
     first * 10 + last
+
+myMain : '{IO, Exception} ()
+myMain = do
+    printLine <| Nat.toText !samplep1
+    printLine <| Nat.toText !samplep2
+    printLine <| Nat.toText !fullp1
+    printLine <| Nat.toText !fullp2

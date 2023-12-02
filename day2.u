@@ -1,0 +1,87 @@
+sample1 = FilePath "day2/sample1.txt"
+input = FilePath "day2/input.txt"
+
+unique type Part = Parsing | Part1
+
+unique type GameSet = {green: Nat, blue: Nat, red: Nat}
+
+unique type Game = {number: Nat, games: List GameSet}
+
+exec: Part -> FilePath -> {IO, Exception} ()
+exec part file = 
+    content = readFileUtf8 file
+    printLine <| match part with
+        Part.Parsing -> evalToText <| parseGames content
+        Part.Part1 -> 
+            games = parseGames content
+            goodGames = List.filter goodGame games
+            goodNumbers = List.map Game.number goodGames
+            Debug.trace "good numbers: " goodNumbers
+            evalToText <| List.foldLeft (+) 0 goodNumbers
+
+parseGames : Text ->{Exception} [Game]
+parseGames content = 
+    lines content |>
+    List.filter (not << Text.isEmpty) |>
+    List.map parseGame 
+        
+
+
+gamePat = Pattern.join [literal "Game ", capture (many digit), literal ":"]
+countPat = Pattern.join [
+    many space, 
+    capture (many digit), 
+    many space, 
+    capture ( 
+        literal "green" 
+            Pattern.+ 
+        literal "blue" 
+            Pattern.+ 
+        literal "red"
+    )
+]
+
+parseSets line = 
+    List.map parseSet <| Text.split ?; line
+
+parsePart: Text -> GameSet -> GameSet
+parsePart line set = 
+    match  Pattern.run countPat line with
+        Some ([counts, name], _) -> 
+            count = fromTextOrFail counts
+            f = match name with
+                "green" -> GameSet.green.set
+                "blue" -> GameSet.blue.set
+                "red" -> GameSet.red.set
+                _ -> bug "unknown color"
+            f count set
+        _ -> bug "failed to parse part"
+
+parseSet : Text ->{Exception} GameSet
+parseSet line = 
+    parts = List.map parsePart <| Text.split ?, line
+    initial = GameSet 0 0 0 
+    List.foldLeft (p s -> s p) initial parts
+
+goodSet : GameSet -> Boolean
+goodSet set = 
+    (GameSet.green set <= 13) 
+        && (GameSet.blue set <= 14) 
+        && (GameSet.red set <= 12)
+
+goodGame : Game -> Boolean
+goodGame game = 
+    List.all goodSet <| Game.games game
+    
+
+parseGame : Text ->{Exception} Game
+parseGame line = 
+    match Pattern.run gamePat line with
+        Some ([num], rest) -> 
+            number = getOrBug "" <| Nat.fromText num
+            sets = parseSets rest
+            Game number sets
+        _ -> bug "failed to parse game"
+
+
+main _ = exec Part1 input
