@@ -1,23 +1,28 @@
-sample1 = FilePath "day2/sample1.txt"
+sample = FilePath "day2/sample.txt"
 input = FilePath "day2/input.txt"
 
-unique type Part = Parsing | Part1
+unique type Part = Parsing | Part1 | Part2
 
 unique type GameSet = {green: Nat, blue: Nat, red: Nat}
 
-unique type Game = {number: Nat, games: List GameSet}
+unique type Game = {number: Nat, sets: List GameSet}
 
 exec: Part -> FilePath -> {IO, Exception} ()
 exec part file = 
     content = readFileUtf8 file
+    games = parseGames content
     printLine <| match part with
-        Part.Parsing -> evalToText <| parseGames content
+        Part.Parsing -> evalToText games
         Part.Part1 -> 
-            games = parseGames content
             goodGames = List.filter goodGame games
             goodNumbers = List.map Game.number goodGames
             Debug.trace "good numbers: " goodNumbers
             evalToText <| List.foldLeft (+) 0 goodNumbers
+        Part.Part2 ->
+            gamePowers = List.map (minSet >> setPower) games
+            Debug.trace "game powers: " gamePowers
+            evalToText <| List.foldLeft (+) 0 gamePowers
+        
 
 parseGames : Text ->{Exception} [Game]
 parseGames content = 
@@ -25,8 +30,6 @@ parseGames content =
     List.filter (not << Text.isEmpty) |>
     List.map parseGame 
         
-
-
 gamePat = Pattern.join [literal "Game ", capture (many digit), literal ":"]
 countPat = Pattern.join [
     many space, 
@@ -71,8 +74,23 @@ goodSet set =
 
 goodGame : Game -> Boolean
 goodGame game = 
-    List.all goodSet <| Game.games game
-    
+    List.all goodSet <| Game.sets game
+
+minSet : Game -> GameSet
+minSet game = 
+    sets = Game.sets game
+    match List.head sets with
+        Some set ->  List.foldLeft setJoin set sets
+        _ -> bug "empty game"
+
+setJoin : GameSet -> GameSet -> GameSet
+setJoin = 
+    cases (GameSet g1 b1 r1) -> 
+    cases (GameSet g2 b2 r2) ->
+    GameSet (Nat.max g1 g2) (Nat.max b1 b2) (Nat.max r1 r2)
+
+setPower: GameSet -> Nat
+setPower = cases (GameSet g b r) -> g * b * r
 
 parseGame : Text ->{Exception} Game
 parseGame line = 
@@ -81,7 +99,7 @@ parseGame line =
             number = getOrBug "" <| Nat.fromText num
             sets = parseSets rest
             Game number sets
-        _ -> bug "failed to parse game"
+        _ -> bug ("failed to parse game: " ++ line)
 
 
-main _ = exec Part1 input
+main _ = exec Part2 input
