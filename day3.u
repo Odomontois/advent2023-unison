@@ -1,0 +1,106 @@
+sample = FilePath "day3/sample.txt"
+input = FilePath "day3/input.txt"
+
+parse : FilePath -> {IO, Exception} (List Text)
+parse file = readFileUtf8 file |> Text.lines
+
+isSymbol : Char -> Boolean
+isSymbol c = not (isDigit c) && not (c == ?.)
+
+symbolAt: List Text -> Nat -> Nat -> Boolean
+symbolAt lines i j = 
+    toDefault 'false '(List.at! i lines |> charAt j |> getOrElse ?. |> isSymbol) ()
+
+symbolNear : List Text -> Nat -> Nat -> Boolean
+symbolNear lines i j = 
+    f = symbolAt lines 
+    f i j || f (i - 1) j || f (i + 1) j ||
+      f i (j - 1) || f i (j + 1) || 
+      f (i - 1) (j - 1) || f (i + 1) (j + 1) || 
+      f (i - 1) (j + 1) || f (i + 1) (j - 1)
+
+sumNumbersInLine : List Text -> Nat -> Nat
+sumNumbersInLine lines i = 
+    line = toDefault! '"" '(List.at! i lines)
+    go j acc curr sym =
+        res = if sym then acc + curr else acc 
+        match charAt j line with
+            None -> res
+            Some c | isDigit c -> go (j + 1) acc (curr * 10 + (Char.toNat c - Char.toNat ?0)) (sym || symbolNear lines i j)
+            Some _ -> go (j + 1) res 0 false
+    go 0 0 0 false
+
+sumNumbers : List Text -> Nat
+sumNumbers lines = 
+    List.range 0 (List.size lines) |> List.map (sumNumbersInLine lines) |> List.foldLeft (+) 0
+            
+
+mains : '{IO, Exception} Nat
+mains _ = parse sample |> sumNumbers
+
+p1 : '{IO, Exception} Nat
+p1 _ = parse input |> sumNumbers
+
+gearAt: List Text -> Nat -> Nat -> { Stream (Nat, Nat) } ()
+gearAt lines i j = 
+    x = 'match charAt j (List.at! i lines) with 
+        Some ?* -> emit (i, j)
+        _ -> ()
+    toDefault! '() x 
+
+gearsNear : List Text -> Nat -> Nat -> { Stream (Nat, Nat) } ()
+gearsNear lines i j =
+    gearAt lines i j 
+    gearAt lines (i + 1) j 
+    gearAt lines i (j + 1)
+    gearAt lines (i + 1) (j + 1)
+    when (i > 0) do
+        gearAt lines (i - 1) j
+        gearAt lines (i - 1) (j + 1)
+    when (j > 0) do
+        gearAt lines i (j - 1)
+        gearAt lines (i + 1) (j - 1)
+    when ((i > 0) && (j > 0)) do
+        gearAt lines (i - 1) (j - 1)
+
+collectGears : List Text -> Nat -> Nat -> Set (Nat, Nat)
+collectGears lines i j = toList! '(gearsNear lines i j) |> Set.fromList
+
+
+> collectGears [
+    "..*..",
+    "..*.*",
+    "*....",
+] 1 2 
+
+
+
+gearsInLine : List Text -> Nat -> Map (Nat, Nat) (List Nat)
+gearsInLine lines i = 
+    line = toDefault! '"" '(List.at! i lines)
+    go j acc curr set =
+        res _ = Set.toMap (_ -> [curr]) set |> Map.unionWith (List.++) acc
+        match charAt j line with
+            None -> res ()
+            Some c | isDigit c -> 
+                set' = Set.union set <| collectGears lines i j
+                curr' = curr * 10 + (Char.toNat c - Char.toNat ?0)
+                go (j + 1) acc curr' set'
+            Some _ -> go (j + 1) (res ()) 0 Set.empty
+    go 0 Map.empty 0 Set.empty
+
+allGears : List Text -> Nat
+allGears lines = 
+    use Nat *
+    List.range 0 (List.size lines) |> 
+    List.map (gearsInLine lines) |> 
+    List.foldLeft (Map.unionWith (List.++)) Map.empty |>
+    Map.values |>
+    List.map cases
+            [x, y] -> x * y
+            _ -> 0 
+        |>
+    List.foldLeft (+) 0
+
+p2s _ = parse sample |> allGears 
+p2 _ = parse input |> allGears 
