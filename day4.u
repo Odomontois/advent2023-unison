@@ -24,14 +24,40 @@ points text =
     (current, winning) = split2 post ?|
     curSet = nums current
     winSet = nums winning
-    Set.intersect curSet winSet |> Set.size |> power
+    Set.intersect curSet winSet |> Set.size
 
 fullPoints : Text -> Nat
 fullPoints = 
-    linePoints line = toDefaultValue! 0 '(points line)
+    linePoints line = toDefaultValue! 0 '(power <| points line)
     Text.lines >> List.map linePoints >> List.foldLeft (+) 0
+
+
+zipSum : List Nat -> List Nat -> List Nat
+zipSum = cases
+    [], r -> r
+    r, [] -> r
+    a +: as, b +: bs -> (a + b) +: zipSum as bs
+
+> zipSum [1, 2] [ 4, 5, 6]
+> zipSum [1, 2, 3] [ 4, 5]
+
+fullCopies : Text -> Nat
+fullCopies text = 
+    lineCopies line mul = List.replicate (toDefaultValue! 0 '(points line)) 'mul
+    linePs = Text.lines text |> List.filter (startsWith "Card")
+    initial = (0, List.replicate (List.size linePs) '1)
+    combine = cases 
+        (acc, mul +: rest), wins -> 
+            (acc + mul, zipSum rest <| lineCopies wins mul)
+        _, _ -> todo "uuugh"
+    (cnt, _) =  List.foldLeft combine initial linePs
+    cnt
 
 s1 _ = readFileUtf8 sample |> fullPoints
 p1 _ = readFileUtf8 input |> fullPoints
+
+s2 _ = readFileUtf8 sample |> fullCopies
+p2 _ = readFileUtf8 input |> fullCopies
+
 
 
