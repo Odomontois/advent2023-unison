@@ -1,0 +1,37 @@
+sample = FilePath "day4/sample.txt"
+input = FilePath "day4/input.txt"
+
+
+parseNat : Text -> {Abort} Nat
+parseNat text = abortOnException '(fromTextOrFail (Text.trim text))
+
+nums: Text -> Set Nat
+nums = Text.split ?\s >> List.filter (not << Text.isEmpty) >> List.map parseNat >> Set.fromList
+
+power : Nat -> Nat
+power = cases
+    0 -> 0
+    n -> Nat.pow 2 (n - 1)
+
+split2 : Text -> Char -> {Abort} (Text, Text)
+split2 text sep = match Text.split sep text with
+    [a, b] -> (a, b)
+    _ -> abort
+
+points : Text -> Nat
+points text = 
+    (_, post) = split2 text ?:
+    (current, winning) = split2 post ?|
+    curSet = nums current
+    winSet = nums winning
+    Set.intersect curSet winSet |> Set.size |> power
+
+fullPoints : Text -> Nat
+fullPoints = 
+    linePoints line = toDefaultValue! 0 '(points line)
+    Text.lines >> List.map linePoints >> List.foldLeft (+) 0
+
+s1 _ = readFileUtf8 sample |> fullPoints
+p1 _ = readFileUtf8 input |> fullPoints
+
+
