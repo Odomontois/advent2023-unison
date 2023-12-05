@@ -25,6 +25,43 @@ getAll : List RangeMap -> Nat -> Nat
 getAll maps n = List.foldLeft (cur m -> getNum m cur) n maps
 
 
+getNums : List (Nat, Nat) -> RangeMap ->  List (Nat, Nat)
+getNums ns rm = 
+    use Nat + min max
+    arr = match rm with RangeMap arr -> arr    
+    go : Nat -> List (Nat, Nat) -> { Stream (Nat, Nat) } ()
+    go i ls = 
+        match Array.at i arr with 
+        None -> List.foreach ls emit
+        Some (x, y, r) -> 
+        match ls with 
+        [] -> ()
+        (a, l) +: rest 
+            | a >= (x + r) -> go (i + 1) ls
+            | a < x -> 
+                len = min l (x - a)
+                emit (a, len)
+                if len == l 
+                then go i rest 
+                else go i ((x, l - len) +: rest)
+            | otherwise ->
+                start = y + a - x
+                len = min l (r + x - a)
+                emit (start, len)
+                if len == l 
+                then go i rest 
+                else go (i + 1) ((a + len, l - len) +: rest)
+    compact : List (Nat, Nat) -> List (Nat, Nat)
+    compact = cases 
+        (a, l) +: ((b, m) +: rest)
+            | a + l >= b -> compact ((a, b + m - a) +: rest)
+            | otherwise -> (a, l) +: compact ((b, m) +: rest)
+        ls -> ls                  
+    '(go 0 ns) |> Stream.toList! |> sortBy at1 |> compact
+
+getNumsAll : List (Nat, Nat) -> List RangeMap -> List (Nat, Nat)
+getNumsAll = List.foldLeft getNums
+
 seedsP : Pattern Text
 seedsP = 
     use Pattern
@@ -48,8 +85,24 @@ parse content =
                 |> List.map parseMap
     (first, maps)
 
+pairs : List a -> List (a, a)
+pairs = cases 
+    x +: (y +: xs) -> (x, y) +: pairs xs
+    _ -> []
+
+parse': Text -> (List (Nat, Nat), List RangeMap)
+parse' content = 
+    (nums, maps) = parse content
+    (pairs nums, maps)
+
 result: List Nat -> List RangeMap -> List Nat
 result nums maps = nums |> List.map (getAll maps)
+
+result': List Nat -> List RangeMap -> List (Nat, Nat)
+result' nums maps = 
+    ones = List.replicate (List.size nums) '1
+    init = List.zip (List.sort nums) ones
+    getNumsAll init maps
 
 parseMap: List Text -> RangeMap
 parseMap block  = 
@@ -62,12 +115,16 @@ parseMap block  =
         |> Array.fromList
         |> RangeMap
 
-> test = Exception.orElse '(RangeMap Array.empty)  '(parseMap ["100 0 5", "1000 10 5", "300 20 5"])
-> getNum test 1
-> getNum test 4
-> getNum test 5
-> getNum test 6
-> getNum test 13
 
-s1 = cases () -> readFileUtf8 sample |> parse |> uncurry result |> minimum
-p1 = cases () -> readFileUtf8 input |> parse |> uncurry result |> minimum
+fst = List.head >> getOrBug "lol" >> at1
+
+s1 = do readFileUtf8 sample |> parse |> uncurry result 
+s1' = do readFileUtf8 sample |> parse |> uncurry result' |> fst
+p1 = do readFileUtf8 input |> parse |> uncurry result |> minimum
+
+p1' = do readFileUtf8 input |> parse |> uncurry result' |> fst
+
+s2 = do readFileUtf8 sample |> parse' |> uncurry getNumsAll |> fst
+p2 = do readFileUtf8 input |> parse' |> uncurry getNumsAll 
+
+-- 25789078 25789078
