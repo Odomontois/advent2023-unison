@@ -1,0 +1,73 @@
+sample = FilePath "day5/sample.txt"
+input = FilePath "day5/input.txt"
+
+use data Array
+
+unique type RangeMap = RangeMap (Array (Nat, Nat, Nat))
+
+getNum : RangeMap -> Nat -> Nat
+getNum = cases (RangeMap m), n -> 
+    go l h = if (h - l) == 1 then Array.at! l m else 
+        mid = (l + h) / 2
+        t = Array.at! mid m
+        x = at1 t
+        if x == n then t
+            else if x > n then go l mid 
+            else go mid h
+
+    calc = do
+        (x, y, r) = go 0 (Array.size m)        
+        if (x > n) || (x + r <= n) then abort else y + n - x
+        
+    toDefaultValue! n calc
+
+getAll : List RangeMap -> Nat -> Nat
+getAll maps n = List.foldLeft (cur m -> getNum m cur) n maps
+
+
+seedsP : Pattern Text
+seedsP = 
+    use Pattern
+    join[literal "seeds: ", sepMany (literal " ") (capture (some digit))]
+
+
+mapP : Pattern Text
+mapP = 
+    use patterns
+    use Pattern
+    some letter + literal "-to-" + some letter + literal "map:"
+
+parse : Text -> (List Nat, List RangeMap)
+parse content = 
+    lines = Text.lines content |> List.filter (not << Text.isEmpty)
+    first = Abort.toBug '(List.at! 0 lines |> captures seedsP |> List.map fromTextOrFail)
+    maps =  lines 
+                |> List.drop 1 
+                |> List.split (isMatch mapP) 
+                |> List.drop 1 
+                |> List.map parseMap
+    (first, maps)
+
+result: List Nat -> List RangeMap -> List Nat
+result nums maps = nums |> List.map (getAll maps)
+
+parseMap: List Text -> RangeMap
+parseMap block  = 
+    triple = cases 
+        [x, y, z] -> (y, x, z)
+        ls -> raiseGeneric "expected triple" ls
+    block 
+        |> List.map (Text.split ?\s >> List.map fromTextOrFail >> triple)
+        |> sortBy at1
+        |> Array.fromList
+        |> RangeMap
+
+> test = Exception.orElse '(RangeMap Array.empty)  '(parseMap ["100 0 5", "1000 10 5", "300 20 5"])
+> getNum test 1
+> getNum test 4
+> getNum test 5
+> getNum test 6
+> getNum test 13
+
+s1 = cases () -> readFileUtf8 sample |> parse |> uncurry result |> minimum
+p1 = cases () -> readFileUtf8 input |> parse |> uncurry result |> minimum

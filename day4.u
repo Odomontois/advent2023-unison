@@ -38,8 +38,6 @@ zipSum = cases
     r, [] -> r
     a +: as, b +: bs -> (a + b) +: zipSum as bs
 
-> zipSum [1, 2] [ 4, 5, 6]
-> zipSum [1, 2, 3] [ 4, 5]
 
 fullCopies : Text -> Nat
 fullCopies text = 
@@ -50,8 +48,7 @@ fullCopies text =
         (acc, mul +: rest), wins -> 
             (acc + mul, zipSum rest <| lineCopies wins mul)
         _, _ -> todo "uuugh"
-    (cnt, _) =  List.foldLeft combine initial linePs
-    cnt
+    at1 <| List.foldLeft combine initial linePs
 
 s1 _ = readFileUtf8 sample |> fullPoints
 p1 _ = readFileUtf8 input |> fullPoints
