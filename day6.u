@@ -4,10 +4,18 @@ input = FilePath "day6/input.txt"
 nums : Text -> List Nat
 nums = Text.dropWhile (not << isDigit) >> Text.split ?\s >> List.filterMap (Nat.fromText)
 
+num : Text -> Nat
+num = toCharList >> List.filter isDigit >> fromCharList >> Nat.fromText >> Optional.getOrElse 0
+
 races: Text -> List (Nat, Nat)
 races = lines >> cases
     first +: (second +: _) -> List.zip (nums first) (nums second)
     _ -> []
+
+race: Text -> (Nat, Nat)
+race = lines >> cases
+    first +: (second +: _) -> (num first, num second)
+    _ -> (0, 0)
 
 
 solveRace time dist = 
@@ -25,5 +33,11 @@ solveRace time dist =
 
 
 p1 f = do readFileUtf8 f |> races |> List.map (uncurry solveRace) |> List.foldLeft (Nat.*) 1
+
 s1 = p1 sample
 i1 = p1 input
+
+p2 f = do readFileUtf8 f |> race |> uncurry solveRace
+s2 = p2 sample
+i2 = p2 input
+
