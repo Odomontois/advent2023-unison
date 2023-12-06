@@ -1,0 +1,29 @@
+sample = FilePath "day6/sample.txt"
+input = FilePath "day6/input.txt"
+
+nums : Text -> List Nat
+nums = Text.dropWhile (not << isDigit) >> Text.split ?\s >> List.filterMap (Nat.fromText)
+
+races: Text -> List (Nat, Nat)
+races = lines >> cases
+    first +: (second +: _) -> List.zip (nums first) (nums second)
+    _ -> []
+
+
+solveRace time dist = 
+    use Float
+    time' = Float.fromNat time
+    dist' = Float.fromNat dist
+    D = (time' * time') - (4.0 * dist')
+    Debug.trace "D" D
+    if D < 0.0 then 0 else 
+    dsqrt = Float.sqrt D
+    x1 = (time' - dsqrt) / 2.0 + 0.00001 |> ceiling
+    x2 = (time' + dsqrt) / 2.0 - 0.00001 |> floor
+    Debug.trace "roots" (x1, x2)
+    x2 - x1 + 1.0 |> toNat |> Optional.getOrElse 0
+
+
+p1 f = do readFileUtf8 f |> races |> List.map (uncurry solveRace) |> List.foldLeft (Nat.*) 1
+s1 = p1 sample
+i1 = p1 input

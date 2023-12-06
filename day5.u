@@ -5,26 +5,6 @@ use data Array
 
 unique type RangeMap = RangeMap (Array (Nat, Nat, Nat))
 
-getNum : RangeMap -> Nat -> Nat
-getNum = cases (RangeMap m), n -> 
-    go l h = if (h - l) == 1 then Array.at! l m else 
-        mid = (l + h) / 2
-        t = Array.at! mid m
-        x = at1 t
-        if x == n then t
-            else if x > n then go l mid 
-            else go mid h
-
-    calc = do
-        (x, y, r) = go 0 (Array.size m)        
-        if (x > n) || (x + r <= n) then abort else y + n - x
-        
-    toDefaultValue! n calc
-
-getAll : List RangeMap -> Nat -> Nat
-getAll maps n = List.foldLeft (cur m -> getNum m cur) n maps
-
-
 getNums : List (Nat, Nat) -> RangeMap ->  List (Nat, Nat)
 getNums ns rm = 
     use Nat + min max
@@ -77,7 +57,7 @@ mapP =
 parse : Text -> (List Nat, List RangeMap)
 parse content = 
     lines = Text.lines content |> List.filter (not << Text.isEmpty)
-    first = Abort.toBug '(List.at! 0 lines |> captures seedsP |> List.map fromTextOrFail)
+    first = Abort.toBug '(List.at! 0 lines |> captures seedsP |> List.filterMap Nat.fromText)
     maps =  lines 
                 |> List.drop 1 
                 |> List.split (isMatch mapP) 
@@ -95,11 +75,9 @@ parse' content =
     (nums, maps) = parse content
     (pairs nums, maps)
 
-result: List Nat -> List RangeMap -> List Nat
-result nums maps = nums |> List.map (getAll maps)
 
-result': List Nat -> List RangeMap -> List (Nat, Nat)
-result' nums maps = 
+result: List Nat -> List RangeMap -> List (Nat, Nat)
+result nums maps = 
     ones = List.replicate (List.size nums) '1
     init = List.zip (List.sort nums) ones
     getNumsAll init maps
@@ -110,7 +88,7 @@ parseMap block  =
         [x, y, z] -> (y, x, z)
         ls -> raiseGeneric "expected triple" ls
     block 
-        |> List.map (Text.split ?\s >> List.map fromTextOrFail >> triple)
+        |> List.map (Text.split ?\s >> List.filterMap Nat.fromText >> triple)
         |> sortBy at1
         |> Array.fromList
         |> RangeMap
@@ -118,13 +96,11 @@ parseMap block  =
 
 fst = List.head >> getOrBug "lol" >> at1
 
-s1 = do readFileUtf8 sample |> parse |> uncurry result 
-s1' = do readFileUtf8 sample |> parse |> uncurry result' |> fst
-p1 = do readFileUtf8 input |> parse |> uncurry result |> minimum
+s1 = do readFileUtf8 sample |> parse |> uncurry result |> fst
 
-p1' = do readFileUtf8 input |> parse |> uncurry result' |> fst
+p1 = do readFileUtf8 input |> parse |> uncurry result |> fst
 
-s2 = do readFileUtf8 sample |> parse' |> uncurry getNumsAll |> fst
-p2 = do readFileUtf8 input |> parse' |> uncurry getNumsAll 
+s2 = do readFileUtf8 sample |> parse' |> uncurry getNumsAll
+p2 = do readFileUtf8 input |> parse' |> uncurry getNumsAll  |> List.take 5
 
 -- 25789078 25789078
