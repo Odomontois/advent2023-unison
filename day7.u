@@ -1,0 +1,48 @@
+sample = FilePath "day7/sample.txt"
+input = FilePath "day7/input.txt"
+
+parseHand : Text -> {Abort} List Nat
+parseHand = toCharList >> List.map cases 
+    c | (?1 <= c) && (c <= ?9) -> Char.toNat c - Char.toNat ?2 + 2
+    ?T -> 10
+    ?J -> 11
+    ?Q -> 12
+    ?K -> 13
+    ?A -> 14
+    _ -> abort
+
+parseLine : Text -> {Abort} (List Nat, Nat)
+parseLine text = 
+    match Text.split ?\s text with
+    [cards, bet] -> (parseHand cards, '(bet |> fromTextOrFail) |> abortOnException)
+    _ -> abort
+
+structural type Comb =  HighCard | Pair | TwoPair | Three |  FullHouse | Four | Five
+
+> List.sort [(Four, 0), (Pair ,2), (Five, 3), (TwoPair, 0), (HighCard, 1), (Pair ,1), (Three, 2), (FullHouse, 0), (Four, 4)]
+
+comb: List a -> Comb
+comb hand = 
+    ones = List.replicate (List.size hand) '1 
+    rankList = hand
+                |> flip List.zip ones
+                |> Map.fromListWith (+)
+                |> Map.values
+                |> List.sort
+                |> List.reverse
+    match rankList with
+    [5] -> Five
+    [4, 1] -> Four
+    [3, 2] -> FullHouse
+    [3, 1, 1] -> Three
+    [2, 2, 1] -> TwoPair
+    [2, 1, 1, 1] -> Pair
+    _ -> HighCard
+
+parse = lines >> List.filterMap (x -> '(parseLine x) |> Abort.toOptional!) >> sortBy cases (c, cs) -> (comb c, c) 
+
+points ps = List.zipWith (x i -> x Nat.* i) ps (List.range 1 (List.size ps + 1)) |> List.foldLeft (+) 0
+
+p1 f = do readFileUtf8 f |> parse |> List.map at2 |> points
+s1 = p1 sample
+i1 = p1 input
