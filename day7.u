@@ -3,7 +3,7 @@ input = FilePath "day7/input.txt"
 
 parseHand : Text -> {Abort} List Nat
 parseHand = toCharList >> List.map cases 
-    c | (?1 <= c) && (c <= ?9) -> Char.toNat c - Char.toNat ?2 + 2
+    c | (?1 <= c) && (c <= ?9) -> Char.toNat c - Char.toNat ?0 
     ?T -> 10
     ?J -> 11
     ?Q -> 12
@@ -21,15 +21,22 @@ structural type Comb =  HighCard | Pair | TwoPair | Three |  FullHouse | Four | 
 
 > List.sort [(Four, 0), (Pair ,2), (Five, 3), (TwoPair, 0), (HighCard, 1), (Pair ,1), (Three, 2), (FullHouse, 0), (Four, 4)]
 
-comb: List a -> Comb
+unique type Info = { hand : List Nat, jokers: Nat, rankList: List Nat }
+
+ones5 = List.replicate 5 '1
+
+comb: List Nat -> Comb
 comb hand = 
-    ones = List.replicate (List.size hand) '1 
+    jokers = List.count (x -> x == 1) hand
     rankList = hand
-                |> flip List.zip ones
+                |> List.filter (x -> x != 1)
+                |> flip List.zip ones5
                 |> Map.fromListWith (+)
                 |> Map.values
                 |> List.sort
                 |> List.reverse
+                |> modifyAt 0 (x -> x + jokers)
+                |> getOrElse' '[5]
     match rankList with
     [5] -> Five
     [4, 1] -> Four
@@ -37,12 +44,24 @@ comb hand =
     [3, 1, 1] -> Three
     [2, 2, 1] -> TwoPair
     [2, 1, 1, 1] -> Pair
-    _ -> HighCard
+    [1, 1, 1, 1, 1] -> HighCard
+    c -> bug c
 
 parse = lines >> List.filterMap (x -> '(parseLine x) |> Abort.toOptional!) >> sortBy cases (c, cs) -> (comb c, c) 
 
 points ps = List.zipWith (x i -> x Nat.* i) ps (List.range 1 (List.size ps + 1)) |> List.foldLeft (+) 0
 
+jokerize = Text.map cases 
+    ?J -> ?1
+    c -> c
+
 p1 f = do readFileUtf8 f |> parse |> List.map at2 |> points
 s1 = p1 sample
 i1 = p1 input
+
+p2 f = do readFileUtf8 f |> jokerize |> parse |> List.map at2 |> points
+
+s2 = p2 sample
+i2 = p2 input
+
+--253678744
