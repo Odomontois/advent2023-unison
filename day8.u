@@ -1,0 +1,53 @@
+sample = FilePath "day8/sample.txt"
+sample2 = FilePath "day8/sample2.txt"
+input = FilePath "day8/input.txt"
+
+use data Array
+
+pat = 
+    use Pattern
+    use patterns
+    name = capture (some letter)
+    join [name, literal " = (", name , literal ", ", name, literal ")"]
+
+structural type Parsed = {commands : Text, nodes: List (Nat, Nat), aaa: Nat, zzz: Nat}
+
+parse: Text -> {Abort} Parsed
+parse input = 
+    ls = lines input
+    commands = List.at! 0 ls
+    fromLine = captures pat >> cases 
+                [x, y, z] -> (x, (y, z))
+                l ->  bug l
+    map = List.drop 2 ls |> List.filter (not << Text.isEmpty) |> List.map fromLine 
+    ones = List.range 0 (List.size map)
+    idxs = List.map at1 map |> flip List.zip ones |> Map.fromList
+    idx = flip (Map.getOrElse 0) idxs
+    nodes = map |> List.map (cases (_, (x, y)) -> (idx x, idx y))
+    aaa = idx "AAA"
+    zzz = idx "ZZZ"
+    Parsed commands nodes aaa zzz
+
+parse': Text -> Parsed
+parse' txt = Abort.toBug '(parse txt)
+
+simulate : Parsed -> Nat
+simulate = cases Parsed commands nodes aaa zzz -> 
+    cn = Text.size commands
+    go ci ni s = 
+        if ni == zzz then s else 
+        node = toDefault! '(0, 0) '(List.at! ni nodes)
+        left = match charAt ci commands with
+            Some ?L -> true
+            _ -> false
+        ci' = Nat.mod (ci + 1) cn
+        ni' = if left then at1 node else at2 node
+        go ci' ni' (s + 1)
+    go 0 aaa 0
+
+
+p1 f = do readFileUtf8 f |> parse' |> simulate
+
+s1 = p1 sample
+s12 = p1 sample2
+i1 = p1 input

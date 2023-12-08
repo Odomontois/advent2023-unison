@@ -1,13 +1,8 @@
-xx = List.map (x -> x * 10) [1, 2, 3, 4, 5]
-> xx
+enumerate : [a] -> [(Nat, a)]
+enumerate as =
+  go n = cases
+    [] -> []
+    a +: as -> (n, a) +: go (n + 1) as
+  go 0 as
 
-fact: Nat -> Nat
-fact n = if n == 0 then 1 else n * fact (n - 1)
-
-> fact 7
-> 4 + 7
-> not true
-
-
-test> fact.test1 = 
-    check (fact 7 == 5040)
+> toCharList "abcde" |> enumerate
