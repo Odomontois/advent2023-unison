@@ -1,0 +1,38 @@
+sample = FilePath "day9/sample.txt"
+input = FilePath "day9/input.txt"
+
+forecast: List Int -> Int
+forecast ns = 
+    use Int
+    if List.all (n -> n == +0) ns then +0 else 
+    tail = List.drop 1 ns
+    init = dropLast ns
+    diffs = List.zipWith (-) tail init
+    nextDiff = forecast diffs
+    last = List.last ns |> getOrElse' '(+0)
+    last + nextDiff
+
+run:  (List Int -> List Int) -> Text -> List Int
+run f = 
+    Text.lines >> List.map (
+        Text.split ?\s 
+        >> List.map (Int.fromText >> getOrElse' '(+0))
+        >> f
+        >> forecast
+    )
+    
+
+    
+
+exe t f = do readFileUtf8 f |> run t |> List.foldLeft (Int.+) +0
+
+p1 = exe id
+p2 = exe List.reverse
+
+
+s1 = p1 sample
+i1 = p1 input
+
+s2 = p2 sample
+
+i2 = p2 input
