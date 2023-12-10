@@ -1,14 +1,23 @@
 sample = FilePath "day10/sample.txt"
 sample2 = FilePath "day10/sample2.txt"
+
+sample3 = FilePath "day10/sample3.txt"
+sample4 = FilePath "day10/sample4.txt"
+sample5 = FilePath "day10/sample5.txt"
+
 input = FilePath "day10/input.txt"
 
 structural type Landscape = {map : List Text, x : Nat, y: Nat}
 
+sizes map = (
+    List.size map,
+    List.at 0 map |> Optional.map Text.size |> Optional.getOrElse 0
+)
+
 landscape : Text -> Landscape
 landscape text = 
     map = lines text |> List.filter (not << Text.isEmpty)
-    n = List.size map |> Debug.tap "n"
-    m = List.at 0 map |> Optional.map Text.size |> Optional.getOrElse 0 |> Debug.tap "m"
+    (n, m) = sizes map |> Debug.tap "sizes"
     startless = Landscape map 0 0
     checkStart i j = provide startless '(symbolAt i j) Char.== ?S
     go i = Stream.range 0 m 
@@ -59,32 +68,86 @@ nextDirection = cases
 directions = [Up, Down, Left, Right]
 
 
-walk : Nat -> Nat -> Direction -> Nat -> {Ask Landscape, Abort} Nat
-walk i j came steps  = 
-        if isStart i j then steps else 
+walk : Nat -> Nat -> Direction -> {Ask Landscape, Abort, Stream (Nat, Nat)} ()
+walk i j came =
+        emit (i, j)
+        if isStart i j then () else 
         dir = symbolAt i j |> flip nextDirection came 
         (i', j') = go i j dir
-        walk i' j' dir (steps + 1)
+        walk i' j' dir
 
-walkAll : '{Ask Landscape, Exception} Nat
-walkAll = do
+border : '{Ask Landscape, Exception} List (Nat, Nat)
+border = do
     ls = ask
     x = Landscape.x ls
     y = Landscape.y ls
-    try dir = 
+    try : Direction -> {Exception, Ask Landscape, Abort} List (Nat, Nat)
+    try dir = toList! do
         (i, j) = go x y dir
-        walk i j dir 0
+        walk i j dir
     error = do raiseGeneric "No solution found" ls
-    orTry : '{Exception, Ask Landscape} Nat -> Direction -> '{Exception, Ask Landscape} Nat
+    orTry : '{Exception, Ask Landscape} List (Nat, Nat) -> Direction -> '{Exception, Ask Landscape} List (Nat, Nat)
     orTry next dir = toDefault next '(try dir)
     directions |> List.foldLeft orTry error |> force
+
+borderChange: Char -> Char -> Boolean
+borderChange = cases
+    ?L, ?7 -> true
+    ?F, ?J -> true
+    _, ?| -> true
+    _, _ -> false
+
+
+inside : '{Ask Landscape, Exception} Nat
+inside = do
+    use Nat
+    use Boolean xor
+    (n, m) = ask |> Landscape.map |> sizes
+    b = border |> force |> Set.fromList
+    walk i acc = if i == n then acc else walkLine i 0 false ?. acc |> walk (increment i)
+    walkLine i j open start acc  = 
+        if j == m then acc else 
+        j' = increment j
+        if Set.contains (i, j) b then 
+            char = symbolAt i j
+            bs' = if char Char.== ?- then start else char
+            change = borderChange start char
+            walkLine i j' (xor open change) bs' acc 
+        else 
+            walkLine i j' open ?. (if open then increment acc else acc) 
+    walk 0 0
     
+count : '{Stream a, g} () -> {g} Nat
+count s = Scope.run do
+        c = Scope.ref 0
+        Stream.foreach (_ -> Ref.modify c Nat.increment) s
+        Ref.read c
+
+-- p1 : FilePath ->{IO, Exception} Nat
+p1 : FilePath ->{IO, Exception} Nat
 p1 f =
     use Nat
     d2u x = (x + 1) / 2
-    readFileUtf8 f |> landscape |> flip provide walkAll |> d2u
+    ls : Landscape
+    ls = readFileUtf8 f |> landscape
+    provide ls border |> List.size |> d2u
+
+p2 : FilePath ->{IO, Exception} Nat
+p2 f = 
+    readFileUtf8 f |> landscape |> flip provide inside
+    
+
 
 s1 = do p1 sample
-s2 = do p1 sample2
+s12 = do p1 sample2
 
 i1 = do p1 input
+
+
+s2 = do p2 sample
+s22 = do p2 sample2
+s23 = do p2 sample3
+s24 = do p2 sample4
+s25 = do p2 sample5
+
+i2 = do p2 input
