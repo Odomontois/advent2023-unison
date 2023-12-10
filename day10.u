@@ -1,0 +1,90 @@
+sample = FilePath "day10/sample.txt"
+sample2 = FilePath "day10/sample2.txt"
+input = FilePath "day10/input.txt"
+
+structural type Landscape = {map : List Text, x : Nat, y: Nat}
+
+landscape : Text -> Landscape
+landscape text = 
+    map = lines text |> List.filter (not << Text.isEmpty)
+    n = List.size map |> Debug.tap "n"
+    m = List.at 0 map |> Optional.map Text.size |> Optional.getOrElse 0 |> Debug.tap "m"
+    startless = Landscape map 0 0
+    checkStart i j = provide startless '(symbolAt i j) Char.== ?S
+    go i = Stream.range 0 m 
+            |> Stream.filter (checkStart i)
+            |> Stream.map (j -> (i, j))
+            |> force
+    (si, sj) = Stream.range 0 n    
+                |> Stream.flatMap go
+                |> toList!
+                |> List.head
+                |> getOrBug "No start found"
+    isStart i j = (i Nat.== si) && (j Nat.== sj)
+    Landscape (lines text) si sj
+
+isStart : Nat -> Nat -> {Ask Landscape} Boolean
+isStart i j = 
+    ls = ask
+    (i Nat.== Landscape.x ls) && (j Nat.== Landscape.y ls)
+
+symbolAt : Nat -> Nat -> {Ask Landscape} Char
+symbolAt i j = ask |> Landscape.map |> List.at i |> Optional.flatMap (charAt j) |> getOrElse ?.
+
+structural type Direction = Up | Down | Left | Right
+
+go : Nat -> Nat  -> Direction -> (Nat, Nat)
+go i j = cases 
+    Up    -> (i - 1, j)
+    Down  -> (i + 1, j)
+    Left  -> (i, j - 1)
+    Right -> (i, j + 1)
+
+nextDirection : Char -> Direction -> {Abort} Direction
+nextDirection = cases
+    ?-, Right -> Right
+    ?-, Left -> Left
+    ?|, Up -> Up
+    ?|, Down -> Down
+    ?7, Up -> Left
+    ?7, Right -> Down
+    ?L, Down -> Right
+    ?L, Left -> Up
+    ?J, Down -> Left
+    ?J, Right -> Up
+    ?F, Up -> Right
+    ?F, Left -> Down
+    _, _ -> abort
+
+directions = [Up, Down, Left, Right]
+
+
+walk : Nat -> Nat -> Direction -> Nat -> {Ask Landscape, Abort} Nat
+walk i j came steps  = 
+        if isStart i j then steps else 
+        dir = symbolAt i j |> flip nextDirection came 
+        (i', j') = go i j dir
+        walk i' j' dir (steps + 1)
+
+walkAll : '{Ask Landscape, Exception} Nat
+walkAll = do
+    ls = ask
+    x = Landscape.x ls
+    y = Landscape.y ls
+    try dir = 
+        (i, j) = go x y dir
+        walk i j dir 0
+    error = do raiseGeneric "No solution found" ls
+    orTry : '{Exception, Ask Landscape} Nat -> Direction -> '{Exception, Ask Landscape} Nat
+    orTry next dir = toDefault next '(try dir)
+    directions |> List.foldLeft orTry error |> force
+    
+p1 f =
+    use Nat
+    d2u x = (x + 1) / 2
+    readFileUtf8 f |> landscape |> flip provide walkAll |> d2u
+
+s1 = do p1 sample
+s2 = do p1 sample2
+
+i1 = do p1 input
