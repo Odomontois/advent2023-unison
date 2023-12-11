@@ -7,6 +7,8 @@ sample5 = FilePath "day10/sample5.txt"
 
 input = FilePath "day10/input.txt"
 
+use Nat increment
+
 structural type Landscape = {map : List Text, x : Nat, y: Nat}
 
 sizes map = (
@@ -100,7 +102,6 @@ borderChange = cases
 
 inside : '{Ask Landscape, Exception} Nat
 inside = do
-    use Nat
     use Boolean xor
     (n, m) = ask |> Landscape.map |> sizes
     b = border |> force |> Set.fromList
@@ -118,12 +119,8 @@ inside = do
     walk 0 0
     
 count : '{Stream a, g} () -> {g} Nat
-count s = Scope.run do
-        c = Scope.ref 0
-        Stream.foreach (_ -> Ref.modify c Nat.increment) s
-        Ref.read c
+count = fold! (const << increment) 0
 
--- p1 : FilePath ->{IO, Exception} Nat
 p1 : FilePath ->{IO, Exception} Nat
 p1 f =
     use Nat
@@ -133,11 +130,8 @@ p1 f =
     provide ls border |> List.size |> d2u
 
 p2 : FilePath ->{IO, Exception} Nat
-p2 f = 
-    readFileUtf8 f |> landscape |> flip provide inside
+p2 f = readFileUtf8 f |> landscape |> flip provide inside
     
-
-
 s1 = do p1 sample
 s12 = do p1 sample2
 

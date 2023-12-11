@@ -1,0 +1,64 @@
+sample = FilePath "day11/sample.txt"
+input = FilePath "day11/input.txt"
+
+use data Array
+
+parse: Text -> List (Nat, Nat)
+parse =
+  lines
+    >> List.indexed 
+    >> List.flatMap (cases (line, i) -> 
+         toCharList line 
+            |> List.indexed
+            |> List.filterMap (cases (c, j) -> if c Char.== ?# then Some (i, j) else None))
+
+countAccum : List Nat -> Array Nat
+countAccum elems = 
+    use Array
+    use Nat
+    use mutable.Array read
+    l = maximum elems |> Optional.getOrElse 0
+    new! 0 (l + 2) (arr -> let
+        List.foreach elems (i -> write arr (i + 1) 1)            
+        go i s = if i > (l + 1) then () else 
+            x = s + read arr i
+            write arr i x
+            go (i + 1) x
+        go 0 0)
+
+spaces : Array Nat -> Nat -> Nat -> Nat
+spaces arr i j = 
+    if i > j then spaces arr j i else
+    j - i + 1 +  (Array.read arr i) - (Array.read arr (j + 1))
+
+absDiff : Nat -> Nat -> Nat
+absDiff x y = if x > y then x - y else y - x
+
+solve : List (Nat, Nat) -> {Exception} Nat
+solve elems = 
+    hspace = elems |> List.map at1 |> countAccum |> spaces
+    vspace = elems |> List.map at2 |> countAccum |> spaces
+    go i = 
+        (x1, y1) = List.at! i elems
+        go' j = 
+            (x2, y2) = List.at! j elems
+            -- Debug.trace "points" ((x1, y1), (x2, y2))
+            -- Debug.trace "distances" (absDiff x1 x2, absDiff y1 y2)
+            -- Debug.trace "spaces" (hspace x1 x2, vspace y1 y2)
+            d = absDiff x1 x2 + absDiff y1 y2 + hspace x1 x2 + vspace y1 y2
+            emit d
+            go' (j + 1)
+        toDefaultValue! () '(go' (i + 1))
+        go (i + 1)
+    fold! (+) 0 <| toDefaultValue () '(go 0)
+    
+
+
+
+p1 f = do readFileUtf8 f |> parse |> solve
+
+s1 = p1 sample
+i1 = p1 input
+
+
+
