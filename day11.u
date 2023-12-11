@@ -26,18 +26,18 @@ countAccum elems =
             go (i + 1) x
         go 0 0)
 
-spaces : Array Nat -> Nat -> Nat -> Nat
-spaces arr i j = 
-    if i > j then spaces arr j i else
-    j - i + 1 +  (Array.read arr i) - (Array.read arr (j + 1))
+spaces : Nat -> Array Nat ->  Nat -> Nat -> Nat
+spaces mul arr i j = 
+    if i > j then spaces mul arr j i else
+    (j - i + 1 +  (Array.read arr i) - (Array.read arr (j + 1))) * mul
 
 absDiff : Nat -> Nat -> Nat
 absDiff x y = if x > y then x - y else y - x
 
-solve : List (Nat, Nat) -> {Exception} Nat
-solve elems = 
-    hspace = elems |> List.map at1 |> countAccum |> spaces
-    vspace = elems |> List.map at2 |> countAccum |> spaces
+solve : Nat -> List (Nat, Nat) -> {Exception} Nat
+solve mul elems = 
+    hspace = elems |> List.map at1 |> countAccum |> spaces mul
+    vspace = elems |> List.map at2 |> countAccum |> spaces mul
     go i = 
         (x1, y1) = List.at! i elems
         go' j = 
@@ -55,10 +55,17 @@ solve elems =
 
 
 
-p1 f = do readFileUtf8 f |> parse |> solve
+p1 f mul = do readFileUtf8 f |> parse |> solve mul
 
 s1 = p1 sample
 i1 = p1 input
+
+s2a = p1 sample 9
+s2b = p1 sample 99
+
+i2 = p1 input 999999
+
+
 
 
 
