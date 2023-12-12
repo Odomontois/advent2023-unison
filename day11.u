@@ -14,7 +14,7 @@ parse =
 
 countAccum : List Nat -> Array Nat
 countAccum elems = 
-    use Array
+    use Array 
     use Nat
     use mutable.Array read
     l = maximum elems |> Optional.getOrElse 0
@@ -24,37 +24,30 @@ countAccum elems =
             x = s + read arr i
             write arr i x
             go (i + 1) x
-        go 0 0)
+        go 0 0 )
 
-spaces : Nat -> Array Nat ->  Nat -> Nat -> Nat
-spaces mul arr i j = 
-    if i > j then spaces mul arr j i else
-    (j - i + 1 +  (Array.read arr i) - (Array.read arr (j + 1))) * mul
-
-absDiff : Nat -> Nat -> Nat
-absDiff x y = if x > y then x - y else y - x
+dist : Nat -> Array Nat ->  Nat -> Nat -> Nat
+dist mul arr i j = 
+    if i > j then dist mul arr j i else
+    nonSpace = Array.read arr (j + 1) - Array.read arr i
+    space = j - i + 1 - nonSpace
+    nonSpace + space * mul 
 
 solve : Nat -> List (Nat, Nat) -> {Exception} Nat
 solve mul elems = 
-    hspace = elems |> List.map at1 |> countAccum |> spaces mul
-    vspace = elems |> List.map at2 |> countAccum |> spaces mul
+    hdist = elems |> List.map at1 |> countAccum |> dist mul
+    vdist = elems |> List.map at2 |> countAccum |> dist mul
     go i = 
         (x1, y1) = List.at! i elems
         go' j = 
             (x2, y2) = List.at! j elems
-            -- Debug.trace "points" ((x1, y1), (x2, y2))
-            -- Debug.trace "distances" (absDiff x1 x2, absDiff y1 y2)
-            -- Debug.trace "spaces" (hspace x1 x2, vspace y1 y2)
-            d = absDiff x1 x2 + absDiff y1 y2 + hspace x1 x2 + vspace y1 y2
+            d = hdist x1 x2 + vdist y1 y2
             emit d
             go' (j + 1)
-        toDefaultValue! () '(go' (i + 1))
+        toDefaultValue! () do go' (i + 1)
         go (i + 1)
-    fold! (+) 0 <| toDefaultValue () '(go 0)
+    fold! (+) 0 <| toDefaultValue () do go 0
     
-
-
-
 p1 f mul = do readFileUtf8 f |> parse |> solve mul
 
 s1 = p1 sample

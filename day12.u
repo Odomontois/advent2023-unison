@@ -1,0 +1,64 @@
+sample = FilePath "day12/sample.txt"
+input = FilePath "day12/input.txt"
+
+
+parse: Text -> {Abort} (Text, List Nat)
+parse line = match Text.split ?\s line with
+    [pat, groups] -> 
+        groupList = Text.split ?, groups |> List.map (Nat.fromText >> Optional.toAbort)
+        (pat, groupList)
+    _ -> abort
+
+parse' l = Abort.toGenericException "shitty text" l do parse l
+
+
+
+solve : Text -> List Nat -> {} Nat
+solve withoutSpace =
+    use Optional getOrElse
+    withSpace = withoutSpace ++ "."
+    byGroup: List Nat -> List Nat
+    byGroup = cases
+        [] -> 
+            lastBrick = Text.dropRightWhile (c -> c Char.!= ?#) withSpace |> Text.size
+            List.fill lastBrick 0 List.++ List.fill (Text.size withSpace + 1 - lastBrick) 1
+        group +: rest -> 
+            shiftGroup = byGroup rest
+            groupPattern = Pattern.join [Pattern.replicate group group (charIn [?#, ??]), charIn [?., ??]]
+            byPat: Nat -> Text -> List Nat 
+            byPat i pat = 
+                if Text.isEmpty pat then [] else
+                shiftPat = byPat (i + 1) (Text.drop 1 pat)
+                c = charAt 0 pat |> getOrElse ?! 
+                hereAndNow = 
+                    if isMatch groupPattern pat then
+                        -- Debug.trace "matched"  (group, i, pat, shiftGroup)
+
+                        List.drop (group + i + 1) shiftGroup 
+                            |> List.head 
+                            |> getOrElse 0
+                            -- |> Debug.tap "filling"
+                    else 0 
+                later = List.head shiftPat |> Optional.filter (_ -> c Char.!= ?#) |> getOrElse 0
+                (hereAndNow Nat.+ later) +: shiftPat
+            -- Debug.trace "input" (group, rest)
+            -- Debug.tap "result" 
+            byPat 0 withSpace
+    byGroup >> List.head >> getOrElse 0
+
+> solve "???.###" [1, 1, 3]
+
+> solve "##.." [2]
+
+> solve "???.###." [1, 1, 3]
+
+> solve ".??..??...?##." [1, 1, 3]
+
+> solve "?###????????" [3, 2, 1]
+
+exe = do solve "?###????????" [3, 2, 1]
+
+p1 f = do readFileUtf8 f |> lines |> List.takeWhile (not << Text.isEmpty) |> List.map (parse' >> uncurry solve) |> sumNats
+
+s1 = p1 sample
+i1 = p1 input

@@ -1,0 +1,20 @@
+forIn : Nat -> Nat -> (Nat -> {e} a) -> {e} ()
+forIn start end body =
+  loop i = if i >= end then () else
+    _ = body i
+    loop (i + 1)
+  loop start
+
+
+
+mutable.Array.fillWith: Nat -> (Nat -> {e, Scope s} a) -> {e, Scope s} mutable.Array (Scope s) a
+mutable.Array.fillWith n f = 
+    first = f 0
+    arr = mutable.Array.fill n first   
+    handle forIn 1 n (i -> mutable.Array.write arr i (f i)) with cases
+        { () } -> ()
+        { Exception.raise _ -> _ } -> ()
+    arr
+    
+List.sumNats : List Nat -> Nat
+List.sumNats = List.foldLeft (Nat.+) 0
