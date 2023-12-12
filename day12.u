@@ -42,8 +42,7 @@ solve withoutSpace =
                     if isMatch groupPattern pat then
                         -- Debug.trace "matched"  (group, i, pat, shiftGroup)
 
-                        List.drop (group + i + 1) shiftGroup 
-                            |> List.head 
+                        List.at (group + i + 1) shiftGroup 
                             |> getOrElse 0
                             -- |> Debug.tap "filling"
                     else 0 
