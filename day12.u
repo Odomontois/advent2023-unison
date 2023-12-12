@@ -8,8 +8,16 @@ parse line = match Text.split ?\s line with
         groupList = Text.split ?, groups |> List.map (Nat.fromText >> Optional.toAbort)
         (pat, groupList)
     _ -> abort
+    
 
 parse' l = Abort.toGenericException "shitty text" l do parse l
+
+unfold: (Text, List Nat) -> (Text, List Nat)
+unfold = cases (txt, groups) ->
+    txt' = Text.join "?" (List.fill 5 txt)
+    groups' = List.join (List.fill 5 groups)
+    (txt', groups')
+
 
 
 
@@ -58,7 +66,12 @@ solve withoutSpace =
 
 exe = do solve "?###????????" [3, 2, 1]
 
-p1 f = do readFileUtf8 f |> lines |> List.takeWhile (not << Text.isEmpty) |> List.map (parse' >> uncurry solve) |> sumNats
+act line f = do readFileUtf8 f |> lines |> List.takeWhile (not << Text.isEmpty) |> List.map line |> sumNats
+p1 = act (parse' >> uncurry solve) 
+p2 = act (parse' >> unfold >> uncurry solve)
 
 s1 = p1 sample
 i1 = p1 input
+
+s2 = p2 sample
+i2 = p2 input
