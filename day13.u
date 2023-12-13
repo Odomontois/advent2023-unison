@@ -1,0 +1,52 @@
+sample = FilePath "day13/sample.txt"
+input = FilePath "day13/input.txt"
+
+parse: Text -> List (List Text)
+parse = lines >> List.split (Text.isEmpty) >> List.takeWhile (not << List.isEmpty)
+
+transpose: List Text -> List Text
+transpose = List.map toCharList >> List.transpose >> List.map fromCharList
+
+tag: List a -> List Nat
+tag list = 
+    tagOne = cases p@(m, n), e ->
+        match Map.get e m with
+            Some k -> 
+                emit k
+                p
+            None -> 
+                emit n
+                (Map.insert e n m, n + 1)
+    (do List.foldLeft tagOne (Map.empty, 0) list) |> toList!
+
+
+returnIfEmpty: a -> '{Stream b} c -> Optional a
+returnIfEmpty x s = handle force s with cases
+    { data.Stream.emit _ -> _ } ->  None
+    { _ } -> Some x
+
+mirror : List Nat -> Optional Nat
+mirror lst = 
+    reflects = cases (as, bs) ->
+        reverse as
+            |> Stream.fromList
+            |> Stream.zipWith (Nat.==) (Stream.fromList bs)
+            |> Stream.filter not
+            |> returnIfEmpty (List.size as)
+            -- |> Debug.tap "reflects"
+
+    List.range 1 (List.size lst)  
+        |> List.map (flip List.splitAt lst >> reflects)
+        |> List.filterMap id 
+        |> List.head 
+
+
+score: List Text -> Nat
+score map = 
+    scores m = tag >> mirror >> Optional.map (x -> x Nat.* m)
+    scores 100 map |> Optional.orElse (scores 1 (transpose map)) |> getOrElse 0
+
+p1 f = do readFileUtf8 f |> parse |> List.map score |> List.foldLeft (+) 0
+
+s1 = p1 sample
+i1 = p1 input
