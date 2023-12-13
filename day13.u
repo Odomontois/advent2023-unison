@@ -7,46 +7,52 @@ parse = lines >> List.split (Text.isEmpty) >> List.takeWhile (not << List.isEmpt
 transpose: List Text -> List Text
 transpose = List.map toCharList >> List.transpose >> List.map fromCharList
 
-tag: List a -> List Nat
-tag list = 
-    tagOne = cases p@(m, n), e ->
-        match Map.get e m with
-            Some k -> 
-                emit k
-                p
-            None -> 
-                emit n
-                (Map.insert e n m, n + 1)
-    (do List.foldLeft tagOne (Map.empty, 0) list) |> toList!
+
+smudges : Text -> Text -> {Smudge} ()
+smudges t1 t2 = 
+    use Bytes at!
+    l = Nat.min (Text.size t1) (Text.size t2)
+    b1 = Text.toUtf8 t1
+    b2 = Text.toUtf8 t2
+    toDefaultValue! () 
+        do forIn 0 l (i -> if at! i b1 == at! i b2 then () else Smudge.smudge)
 
 
-returnIfEmpty: a -> '{Stream b} c -> Optional a
-returnIfEmpty x s = handle force s with cases
-    { data.Stream.emit _ -> _ } ->  None
-    { _ } -> Some x
+structural ability Smudge where 
+    smudge : ()
 
-mirror : List Nat -> Optional Nat
-mirror lst = 
+countExactly : Nat -> '{g, Smudge} a -> '{g} Boolean
+countExactly = 
+    handler : Nat -> Request {Smudge} a -> {g} Boolean
+    handler i = cases
+        {Smudge.smudge -> k} -> if i == 0 then false else handle k () with handler (i - 1)
+        { _ } -> i == 0
+
+    i s -> do handle s () with handler i
+
+mirror' : Nat -> List Text -> Optional Nat
+mirror' smn lst = 
     reflects = cases (as, bs) ->
         reverse as
             |> Stream.fromList
-            |> Stream.zipWith (Nat.==) (Stream.fromList bs)
-            |> Stream.filter not
-            |> returnIfEmpty (List.size as)
-            -- |> Debug.tap "reflects"
+            |> Stream.zipWith smudges (Stream.fromList bs)
+            |> countExactly smn
+            |> drain
 
     List.range 1 (List.size lst)  
-        |> List.map (flip List.splitAt lst >> reflects)
-        |> List.filterMap id 
-        |> List.head 
+        |> List.filter (flip List.splitAt lst >> reflects)
+        |> List.head
 
 
-score: List Text -> Nat
-score map = 
-    scores m = tag >> mirror >> Optional.map (x -> x Nat.* m)
+score: Nat -> List Text -> Nat
+score smn map = 
+    scores m = mirror' smn >> Optional.map (x -> x Nat.* m)
     scores 100 map |> Optional.orElse (scores 1 (transpose map)) |> getOrElse 0
 
-p1 f = do readFileUtf8 f |> parse |> List.map score |> List.foldLeft (+) 0
 
-s1 = p1 sample
-i1 = p1 input
+solve i f = do readFileUtf8 f |> parse |> List.map (score i) |> List.foldLeft (+) 0
+s1 = solve 0 sample
+i1 = solve 0 input
+
+s2 = solve 1 sample
+i2 = solve 1 input
