@@ -56,3 +56,10 @@ i1 = solve 0 input
 
 s2 = solve 1 sample
 i2 = solve 1 input
+
+
+> Debug.tap "Я" false 
+   && Debug.tap "ЛЮБЛЮ" false
+   && Debug.tap "ОБМАЗЫВАТЬСЯ" false
+   && Debug.tap "НЕСВЕЖИМ" false
+   && Debug.tap "ЭФФЕКТОМ[" false

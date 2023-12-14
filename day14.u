@@ -1,0 +1,22 @@
+sample = FilePath "day14/sample.txt"
+input = FilePath "day14/input.txt"
+
+
+calcLoad : List Char -> Nat
+calcLoad ls = 
+    n = List.size ls
+    go weight = cases 
+        (?., _) -> weight
+        (?#, i) -> n - i - 1
+        (?O, _) -> 
+            emit weight
+            weight - 1
+        _ -> bug "invalid char"
+    '(List.indexed ls |> List.foldLeft go n) |> fold! (+) 0
+
+parse = lines >> List.map toCharList >> transpose
+
+solve f = do readFileUtf8 f |> parse |> List.map calcLoad |> List.foldLeft (+) 0
+
+s1 = solve sample
+i1 = solve input
