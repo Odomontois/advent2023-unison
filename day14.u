@@ -1,6 +1,7 @@
 sample = FilePath "day14/sample.txt"
 input = FilePath "day14/input.txt"
 
+use Nat + - mod
 
 calcLoad : List Char -> Nat
 calcLoad ls = 
@@ -14,9 +15,100 @@ calcLoad ls =
         _ -> bug "invalid char"
     '(List.indexed ls |> List.foldLeft go n) |> fold! (+) 0
 
+pushLeft : List Char -> List Char
+pushLeft ls = 
+    n = List.size ls
+    emitFree n = if n == 0 then () else 
+        emit ?.
+        emitFree (n - 1)
+    go free = cases 
+        ?. -> free + 1
+        ?# -> 
+            emitFree free
+            emit ?#
+            0
+        ?O -> 
+            emit ?O
+            free
+        _ -> bug "invalid char"
+    Stream.toList! do
+        x = List.foldLeft go 0 ls
+        emitFree x
+
+tilt = List.map pushLeft
+
+
+cycle : List (List Char) -> List (List Char)
+cycle =  
+    tilt 
+        >> transpose >> tilt
+        >> transpose >> List.map reverse >> tilt
+        >> reverse >> transpose >> tilt
+        >> reverse >> List.map reverse >> transpose
+
+rotate = transpose >> List.map reverse
+
+debugWith: (List (List Char) -> List (List Char)) -> Text -> List (List Char) -> List (List Char)
+debugWith f text xs = 
+    Debug.trace text (f xs |> List.map fromCharList)
+    xs
+
+
+
+cycle' : List (List Char) -> List (List Char)
+cycle' =  cycle >> debugWith transpose "cycle"
+
+
+weightLine : List Char -> Nat
+weightLine ls = 
+    n = List.size ls
+    List.indexed ls |> List.map (cases (x, i) -> if x == ?O then n - i else 0) |> List.foldLeft (+) 0
+
+weight = List.foldLeft (s y -> s + weightLine y) 0
+
 parse = lines >> List.map toCharList >> transpose
 
-solve f = do readFileUtf8 f |> parse |> List.map calcLoad |> List.foldLeft (+) 0
+solve f = do readFileUtf8 f |> parse |> List.map calcLoad |> List.foldLeft (+) 0 
 
-s1 = solve sample
-i1 = solve input
+solve' f = do readFileUtf8 f |> parse |> List.map pushLeft |> weight
+
+
+
+toBytes : Text -> mutable.ByteArray {Scope s}
+toBytes = Text.toUtf8 >> ByteArray.fromBytes >> Scope.thawByteArray
+
+toByteMap : List Text -> mutable.Array {Scope s} (mutable.ByteArray {Scope s})
+toByteMap = List.map toBytes >> Array.fromList >> Scope.thawArray
+
+ROUND = Char.toNat ?O
+
+SQUARE = Char.toNat ?#
+
+
+
+s1 = solve' sample
+i1 = solve' input
+
+
+loopCycle : Nat -> List (List Char) -> (Nat, Nat, Nat)
+loopCycle loops = 
+    go : Nat -> NatMap Nat -> List (List (List Char)) -> List (List Char) -> (Nat, Nat, Nat)
+    go i cache states map =
+        h = murmurHash map
+        match NatMap.get h cache with
+        Some n -> 
+            k = loops - n
+            d = i - n
+            j = (mod k d) + n
+            state = List.at j states |> Optional.getOrElse []
+            (weight state, i, n)
+        None -> 
+            go (i + 1) (NatMap.insert h i cache) (states :+ map) (cycle map)
+    go 0 NatMap.empty []
+
+
+play f = do readFileUtf8 f |> parse |> loopCycle 1000000000
+
+ps = play sample
+
+pi = play input
