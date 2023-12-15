@@ -1,0 +1,10 @@
+parsed name = "day15/" Text.++ name Text.++ ".txt" |> FilePath |> readFileUtf8 |> Text.split ?,
+
+hash = 
+    hashAdd acc = Char.toNat >> (+) acc >> (*) 17 >> flip mod 256
+    delay Text.toStream >> fold! hashAdd 0
+
+p1 = parsed >> List.map hash >> List.foldLeft (+) 0 |> delay
+
+s1 = p1 "sample"
+i1 = p1 "input"
