@@ -1,10 +1,66 @@
 parsed name = "day15/" Text.++ name Text.++ ".txt" |> FilePath |> readFileUtf8 |> Text.split ?,
 
+op code = (
+    Text.takeWhile isLetter code, 
+    if endsWith code "-" then None
+    else takeRightWhile isDigit code |> Nat.fromText
+)
+parsed2 = parsed >> List.map op
+
 hash = 
     hashAdd acc = Char.toNat >> (+) acc >> (*) 17 >> flip mod 256
     delay Text.toStream >> fold! hashAdd 0
 
-p1 = parsed >> List.map hash >> List.foldLeft (+) 0 |> delay
+p1 = parsed >> List.map hash >> (id &&& List.foldLeft (+) 0) |> delay
+
+
+structural type Box = { indices: Map Text Nat, lenses: List (Text, Nat) }
+
+Box.empty : Box
+Box.empty = Box Map.empty []
+
+Box.put : (Text, Nat) -> Box -> Box
+Box.put = cases p@(name, x), Box indices lenses -> 
+    match Map.get name indices with
+    Some i -> Box indices <| List.replace i p lenses
+    None -> Box (Map.insert name (List.size lenses) indices) (lenses :+ p)
+
+Box.remove : Text -> Box -> Box
+Box.remove name = cases b@(Box indices lenses) -> 
+    match Map.get name indices with
+    Some i ->  Box (Map.delete name indices) (replace i ("!", 0) lenses)
+    None -> b
+
+Box.power : Box -> Nat
+Box.power = Box.lenses 
+                >> Stream.fromList 
+                >> Stream.filter (at1 >> (Text.!=) "!")
+                >> Stream.map at2 
+                >> Stream.indexed 
+                >> Stream.map (cases (x, i) -> x * (i + 1)) 
+                >> fold! (+) 0
+
+
+simulate : (Text, Optional Nat) -> [Box] -> [Box]
+simulate = cases (name, oper) -> let 
+    action = cases
+        Some x -> Box.put (name, x)
+        None -> Box.remove name
+    updateAt (action oper) (hash name) 
+
+totalPower : [Box] -> Nat
+totalPower = Stream.fromList >> Stream.indexed >> Stream.map (cases (b, i) -> Box.power b * (i + 1)) >> fold! (+) 0
+
+cleaned = List.map Box.lenses >> List.indexed >> List.filter (not << List.isEmpty << at1)
+
+p2 = parsed2 
+        -- >> Debug.tap "ops" 
+        >> List.foldLeft (flip simulate) (List.fill 256 Box.empty) 
+        >> totalPower
+        |> delay
 
 s1 = p1 "sample"
 i1 = p1 "input"
+
+s2 = p2 "sample"
+i2 = p2 "input"
