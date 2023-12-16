@@ -1,0 +1,105 @@
+open name = "day16/" Text.++ name Text.++ ".txt" 
+                |> FilePath
+                |> readFileUtf8
+                |> lines
+
+structural type Direction = Up | Down | Left | Right
+dirBit : Direction -> Nat
+dirBit = cases
+    Up -> 0
+    Down -> 1
+    Left -> 2
+    Right -> 3
+
+horizontal : Direction -> Boolean
+horizontal = cases
+    Left -> true
+    Right -> true
+    _ -> false
+
+vertical : Direction -> Boolean
+vertical = cases
+    Up -> true
+    Down -> true
+    _ -> false
+
+
+use mutable.ByteArray read8 write8
+use Nat setBit bit -
+    
+solution : [Text] -> Nat
+solution m = 
+    n = List.size m
+    continue : Nat -> Nat -> Direction -> {Walk} ()
+    continue i j d = 
+        match d with 
+        Up | i > 0 -> step (i - 1) j d
+        Down | i < (n - 1) -> step (i + 1) j d
+        Left | j > 0 -> step i (j - 1) d
+        Right | j < (n - 1) -> step i (j + 1) d
+        _ -> ()
+    step i j d = 
+        -- Debug.trace "step" (i, j, d)
+        walk i j d
+        c = List.at i m |> Optional.flatMap (charAt j) |> Optional.getOrElse ?.
+        turn = continue i j
+        decide = cases
+            ?|, d | horizontal d -> 
+                fork '(turn Up)
+                turn Down
+            ?-, d | vertical d -> 
+                fork '(turn Left)
+                turn Right
+            ?/, Up -> turn Right
+            ?/, Down -> turn Left
+            ?/, Left -> turn Down
+            ?/, Right -> turn Up
+            ?\\, Up -> turn Left
+            ?\\, Down -> turn Right
+            ?\\, Left -> turn Up
+            ?\\, Right -> turn Down
+            _, _ -> turn d
+        decide c d
+    walkAll n '(step 0 0 Right)
+
+structural ability Walk where 
+    walk: Nat -> Nat -> Direction -> ()
+    fork: '{Walk} () -> ()
+
+walkAll: Nat -> '{Walk} () -> Nat
+walkAll size act = Scope.run do
+    seen = Seen size (Scope.byteArrayOf 0 (size * size))
+    handler: Request {Walk} () -> () 
+    handler = cases
+        {Walk.walk i j d -> k} -> if mark i j d seen then handle k () with handler else ()
+        {Walk.fork l -> r} -> 
+            handle l () with handler
+            handle r () with handler
+        { () } -> ()
+    handle act () with handler
+    ones seen
+
+
+structural type Seen g = {size: Nat, data: mutable.ByteArray g}  
+
+mark : Nat -> Nat -> Direction -> Seen { Scope s } -> { Scope s } Boolean
+mark i j d = cases (Seen size data) -> 
+    Exception.orElse 'false do
+    k = i * size + j
+    b = dirBit d
+    x = read8 data k
+    cur = setBit b x
+    write8 data k cur
+    bit b x == 0
+
+ones : Seen {Scope s} -> {Scope s} Nat
+ones = cases (Seen size data) -> 
+    go i acc = 
+        acc' = if read8 data i == 0 then acc else acc + 1
+        if i == 0 then acc' else go (i - 1) acc'
+    Exception.orElse '0 do go (size * size - 1) 0
+
+run = open >> solution |> delay
+
+s1 = run "sample"
+i1 = run "input"
