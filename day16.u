@@ -25,10 +25,10 @@ vertical = cases
 
 
 use mutable.ByteArray read8 write8
-use Nat setBit bit -
+use Nat setBit bit - max
     
-solution : [Text] -> Nat
-solution m = 
+solution : [Text]  -> Nat -> Nat -> Direction -> Nat
+solution m x y dir = 
     n = List.size m
     continue : Nat -> Nat -> Direction -> {Walk} ()
     continue i j d = 
@@ -60,7 +60,7 @@ solution m =
             ?\\, Right -> turn Down
             _, _ -> turn d
         decide c d
-    walkAll n '(step 0 0 Right)
+    walkAll n '(step x y dir)
 
 structural ability Walk where 
     walk: Nat -> Nat -> Direction -> ()
@@ -99,7 +99,24 @@ ones = cases (Seen size data) ->
         if i == 0 then acc' else go (i - 1) acc'
     Exception.orElse '0 do go (size * size - 1) 0
 
-run = open >> solution |> delay
+possibles : [Text] -> Nat
+possibles text = 
+    n = List.size text
+    sol = solution text
+    chook : (Nat -> Nat) -> {Stream Nat} Unit
+    chook f = Stream.range 0 n |> Stream.map f |> force
+    fold! max 0 do
+        chook (i -> sol i 0 Right)
+        chook (j -> sol 0 j Down)
+        chook (i -> sol i (n - 1) Left)
+        chook (j -> sol (n - 1) j Up)
+
+run = open >> (m -> solution m 0 0 Right) |> delay
 
 s1 = run "sample"
 i1 = run "input"
+
+run2 = open >> possibles |> delay
+
+s2 = run2 "sample"
+i2 = run2 "input"
