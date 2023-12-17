@@ -27,22 +27,22 @@ buggy el = toDefault! '(bug el)
 
 nexts : Dijkstra -> Elem -> {Stream Elem, Abort, Ask Config} ()
 nexts = cases (Dijkstra _ dis), (Elem h x y dir) -> let
-    n = gridSize () |> Nat.toInt
-    start = startStep ask
-
     walk dx dy dir = 
+        start = startStep ask
+        n = gridSize () |> Nat.toInt
         go : Int -> Int -> Nat -> Nat -> {Stream Elem, Abort, Ask Config} ()
         go x y i h' = 
             when ((i > 0) && (x >= +0) && (x < n) && (y >= +0) && (y < n)) do
-                nx = Int.toNat x |> getOrElse 0
-                ny = Int.toNat y |> getOrElse 0          
+                nx = Int.toNat x |> Optional.getOrElse 0
+                ny = Int.toNat y |> Optional.getOrElse 0          
                 h = (grid ask |> at! nx |> at! ny) + h'
                 cur =  dis |> at! dir |> at! nx |> at! ny
                 when (h Nat.< cur) do
                     emit (Elem h nx ny dir)
                 go (x + dx) (y + dy) (Nat.decrement i) h
-
-        go ((toInt x) Int.+ (start Int.* dx)) ((toInt y) + (start Int.* dy)) (maxStep ask) h
+        startX = (toInt x) Int.+ (start Int.* dx)
+        startY = (toInt y) + (start Int.* dy)
+        go startX startY (maxStep ask) h
     stop = maxStep ask
     if dir == 1 then
         walk +1 +0 0
