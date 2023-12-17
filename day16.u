@@ -39,16 +39,15 @@ solution m x y dir =
         Right | j < (n - 1) -> step i (j + 1) d
         _ -> ()
     step i j d = 
-        -- Debug.trace "step" (i, j, d)
         walk i j d
         c = List.at i m |> Optional.flatMap (charAt j) |> Optional.getOrElse ?.
         turn = continue i j
         decide = cases
             ?|, d | horizontal d -> 
-                fork '(turn Up)
+                fork do turn Up
                 turn Down
             ?-, d | vertical d -> 
-                fork '(turn Left)
+                fork do turn Left
                 turn Right
             ?/, Up -> turn Right
             ?/, Down -> turn Left
@@ -103,15 +102,23 @@ possibles : [Text] -> Nat
 possibles text = 
     n = List.size text
     sol = solution text
-    chook : (Nat -> Nat) -> {Stream Nat} Unit
-    chook f = Stream.range 0 n |> Stream.map f |> force
-    fold! max 0 do
-        chook (i -> sol i 0 Right)
-        chook (j -> sol 0 j Down)
-        chook (i -> sol i (n - 1) Left)
-        chook (j -> sol (n - 1) j Up)
+    attempt : (Nat -> Nat) -> '{IO} Nat
+    attempt f = 
+        p = force Promise.new
+        ignore <| IO.concurrent.fork do
+            Stream.range 0 n |> Stream.map f |> fold! max 0 |> write_ p
+        do Promise.read p
+    [ , i -> sol i 0 Right
+      , j -> sol 0 j Down
+      , i -> sol i (n - 1) Left
+      , j -> sol (n - 1) j Up
+    ] |> List.map attempt
+      |> List.map force
+      |> List.foldLeft max 0
 
 run = open >> (m -> solution m 0 0 Right) |> delay
+
+> [,,1,,,,2,,]
 
 s1 = run "sample"
 i1 = run "input"
