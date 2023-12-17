@@ -7,71 +7,76 @@ read = (Text.++) "day17/"
 updateDist:  Nat -> Nat -> Nat -> Nat -> [[[Nat]]] -> [[[Nat]]]   
 updateDist d x y = updateAt (updateAt (replace y d) x)
 
-start : [[Nat]] -> {Abort} Dijkstra
-start grid = 
-    n = List.size grid
+start : '{Abort, Ask Config} Dijkstra
+start = do 
+    n = List.size (grid ask)
     first dir = (Elem 0 0 0 dir, ())
     queue = Map.fromList [first 0, first 1]
     dists = fill n maxNat |> fill n |> fill 2 |> updateDist 0 0 0 0 |> updateDist 0 0 0 1
-    Dijkstra queue dists grid
+    Dijkstra queue dists
 
 structural type Elem = {dist: Nat, x: Nat, y: Nat, dir: Nat}
 
-structural type Dijkstra = { queue : Map Elem (), dists: [[[Nat]]], heatmap: [[Nat]] }
+structural type Config = { startStep: Int, maxStep: Nat, grid: [[Nat]] }
+structural type Dijkstra = { queue : Map Elem (), dists: [[[Nat]]]}
 
 use Nat ==
 
 buggy : a -> '{g, Abort} b -> {g} b
 buggy el = toDefault! '(bug el) 
 
-nexts : Dijkstra -> Elem -> {Stream Elem, Abort} ()
-nexts = cases (Dijkstra _ dis grid), (Elem h x y dir) -> let
-    use Int increment decrement < >=
-    n = List.size grid |> Nat.toInt
-    walk : Int -> Int -> Nat -> Nat -> (Int -> Int) -> (Int -> Int) -> Nat -> {Stream Elem, Abort} ()
-    walk x' y' i h' dx dy dir = 
-        x = dx x'
-        y = dy y'
-        when ((i > 0) && (x >= +0) && (x < n) && (y >= +0) && (y < n)) do
-            nx = Int.toNat x |> getOrElse 0
-            ny = Int.toNat y |> getOrElse 0          
-            h = (grid |> at! nx |> at! ny) + h'
-            cur =  dis |> at! dir |> at! nx |> at! ny
-            when (h Nat.< cur) do
-                emit (Elem h nx ny dir)
-            walk x y (Nat.decrement i) h dx dy dir
-    step dx = walk (toInt x) (toInt y) 3 h dx
-    when (dir == 1) do
-        step Int.increment id 0
-        step Int.decrement id 0
-    when (dir == 0) do
-        step id Int.increment 1
-        step id Int.decrement 1
+nexts : Dijkstra -> Elem -> {Stream Elem, Abort, Ask Config} ()
+nexts = cases (Dijkstra _ dis), (Elem h x y dir) -> let
+    n = gridSize () |> Nat.toInt
+    start = startStep ask
 
-account :  Dijkstra -> Elem -> {Abort} Dijkstra
-account = cases dij@(Dijkstra q dis h), e@(Elem d x y dir) -> let
+    walk dx dy dir = 
+        go : Int -> Int -> Nat -> Nat -> {Stream Elem, Abort, Ask Config} ()
+        go x y i h' = 
+            when ((i > 0) && (x >= +0) && (x < n) && (y >= +0) && (y < n)) do
+                nx = Int.toNat x |> getOrElse 0
+                ny = Int.toNat y |> getOrElse 0          
+                h = (grid ask |> at! nx |> at! ny) + h'
+                cur =  dis |> at! dir |> at! nx |> at! ny
+                when (h Nat.< cur) do
+                    emit (Elem h nx ny dir)
+                go (x + dx) (y + dy) (Nat.decrement i) h
+
+        go ((toInt x) Int.+ (start Int.* dx)) ((toInt y) + (start Int.* dy)) (maxStep ask) h
+    stop = maxStep ask
+    if dir == 1 then
+        walk +1 +0 0
+        walk -1 +0 0
+    else
+        walk +0 +1 1
+        walk +0 -1 1
+
+account :  Dijkstra -> Elem -> {Abort, Ask Config} Dijkstra
+account = cases dij@(Dijkstra q dis), e@(Elem d x y dir) -> let
     prev = dis |> at! dir |> at! x |> at! y
     if d >= prev then dij else
         q' = q |> Map.delete (Elem prev x y dir) |> Map.insert e ()
         dis' = updateDist d x y dir dis 
-        Dijkstra q' dis' h
+        Dijkstra q' dis'
 
+gridSize : '{Ask Config} Nat
+gridSize _ = grid ask |> List.size
 
-step : Dijkstra -> { Throw Nat, Abort } Dijkstra
-step = cases dij@(Dijkstra queue dists grid) -> let
+step : Dijkstra -> { Throw Nat, Abort, Ask Config } Dijkstra
+step = cases dij@(Dijkstra queue dists) -> let
     ((e@(Elem d x y dir), ()), q') = buggy "queue ended" do breakOffMin! queue
     dij' = Dijkstra.queue.set q' dij
     -- Debug.trace "got elem" e
-    n' = List.size grid - 1
+    n' = gridSize () - 1
     when ((x == n') && (y == n')) do throw d
     fold! account dij' do nexts dij' e
 
-dijkstra : [[Nat]] -> {} Optional Nat
+dijkstra : Config -> {} Optional Nat
 dijkstra = 
     go dij = go (step dij)
-    start >> go |> delay >> catchWith Some |> delay >> Abort.toBug
+    cfg -> start >> go |> delay (provide cfg) |> delay (catchWith Some) |> Abort.toBug
 
-run = read >> dijkstra |> delay
+run = read >> Config +1 3 >> dijkstra |> delay
 
 s1 = run "sample"
 i1 = run "input"
