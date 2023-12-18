@@ -64,9 +64,6 @@ dig insts = Scope.run do
     Stream.range 0 (sizeX * sizeY) |> Stream.map (read8 arr >> (x -> if x == 2 then 0 else 1)) |> fold! (+) 0
 
 
-walk : (Int, Int) -> Instruction -> {} (Int, Int)
-walk = walk' (x y -> ())
-
 walk' : (Int -> Int -> {e} ()) -> (Int, Int) -> Instruction -> {e} (Int, Int)
 walk' act = cases 
     (x, y), Instruction dir len _ -> 
@@ -84,6 +81,16 @@ walk' act = cases
             Right ->
                 forIn 0 len (i -> act x (y + Nat.toInt i)) 
                 (x , y +  len')
+
+walk : (Int, Int) -> Instruction -> (Int, Int)
+walk = cases 
+    (x, y), Instruction dir len _ -> 
+        len' = Nat.toInt len
+        match dir with
+            Up -> (x - len', y)
+            Down -> (x + len', y)
+            Left -> (x, y - len')
+            Right ->(x , y + len')
 
 borders : [Instruction] -> (Int, Int, Int, Int)
 borders = 
@@ -104,3 +111,115 @@ run1 = readFileUtf8 >> parse >> dig |> delay
 
 s1 = run1 sample
 i1 = run1 input
+
+recode : Instruction -> Instruction
+recode = cases Instruction _ _ code -> let
+    (dt, it) = Text.splitAt 5 code
+    len = dt |> toCharList |> fromCharList |> Nat.fromHex |> getOrBug ("bad length", dt)
+    inst = match it with 
+        "0" -> Right
+        "1" -> Down
+        "2" -> Left
+        "3" -> Up
+        _ -> bug ("bad instruction digit", it)
+    Instruction inst len code
+
+
+
+points : [Int] -> [Int]
+points = List.sort >> distinct >> List.flatMap (x -> [x, x + +1]) >> distinct >> cases 
+    ps @ (first +: (xs :+ last)) -> (first - +1) +: (ps :+ (last + +1))
+    ps -> ps
+
+toIndexMap : Int -> [Int] -> NatMap Nat
+toIndexMap start = List.map ((x -> x - start ) >> fromInt) >> List.indexed >> NatMap.fromList
+
+allInfo : [Instruction] -> (Info, Info)
+allInfo insts = 
+    (xs, ys) = Stream.fromList insts |> Stream.scan walk (+0, +0) |> toList! |> List.unzip
+    (getInfo xs, getInfo ys)
+
+structural type Info = { decode: Int -> Nat, size : Nat, start : Int, points: [Int], width: Nat -> Int }
+
+getInfo : [Int] -> Info
+getInfo xs = 
+    ps = points xs
+    start = ps |> List.head |> Optional.getOrBug "no start"
+    decodeMap = toIndexMap start ps
+    decode x = (x - start) |> fromInt |> flip NatMap.get decodeMap |> Optional.getOrBug ("bad x", x, start, x - start)
+    size = List.size ps
+    -- Debug.trace "decodeMap" (NatMap.toList decodeMap, NatMap.size decodeMap)
+    -- Debug.trace "start" start
+    width i = Abort.toBug '(List.at! (i + 1) ps - List.at! i ps)
+    Info decode size start ps width
+
+
+dig2 : [Instruction] -> Nat
+dig2 insts = Scope.run do
+    use mutable.ByteArray write8 read8
+    use Nat toInt
+    (Info decodeX sizeX startX xs widthX, Info decodeY sizeY startY ys widthY) = allInfo insts
+    arr = Scope.byteArrayOf 0 (sizeX * sizeY)
+    sizeX' = Nat.toInt sizeX
+    sizeY' = Nat.toInt sizeY
+    paint c x y = write8 arr (x * sizeY + y) c
+    markAll = cases (sx, sy), (ex, ey) -> 
+        sx' = decodeX sx
+        sy' = decodeY sy
+        ex' = decodeX ex
+        ey' = decodeY ey
+        -- Debug.trace "markAll" (sx', sy', ex', ey')
+        if sx' < ex' then forIn sx' (ex' + 1) (x -> paint 1 x sy')
+        else if sx' > ex' then forIn ex' (sx' + 1) (x -> paint 1 x sy')
+        else if sy' < ey' then forIn sy' (ey' + 1) (y -> paint 1 sx' y)
+        else forIn ey' (sy' + 1) (y -> paint 1 sx' y)
+    step p inst =
+            p' = walk p inst
+            markAll p p'
+            p'
+    List.foldLeft step (+0, +0) insts |> Debug.trace "final"
+    inside x y  = (x >= +0) && (y >= +0) && (x < sizeX') && (y < sizeY')
+    goto x y = if inside x y then
+        x' = fromInt x
+        y' = fromInt y
+        if  read8 arr (x' * sizeY + y') == 0 then
+            paint 2 x' y'
+            emit (x, y)
+        else ()
+        else ()
+
+    floodfill : [(Int, Int)] -> ()
+    floodfill ls = if List.isEmpty ls then () else 
+        do List.foreach ls (cases (x, y) -> 
+            goto (x - +1) y
+            goto (x + +1) y
+            goto x (y - +1)
+            goto x (y + +1)
+        ) |> toList! |> floodfill
+    floodfill [(+0, +0)]
+    charAt x y = match read8 arr (x * sizeY + y) with 
+        1 -> ?#
+        2 -> ?% 
+        _ -> ?.
+    costAt x y = widthX x * widthY y
+    lst = List.range 0 sizeX |> List.map (x -> List.range 0 sizeY |> List.map (charAt x) |> fromCharList)
+    Debug.trace "map" lst
+    Stream.range 0 sizeX 
+        |> Stream.flatMap 
+            (x -> Stream.range 0 sizeY 
+                |> Stream.filter (y -> charAt x y != ?%) 
+                |> Stream.map! (y -> costAt x y)
+            )
+        |> fold! (+) +0
+        |> fromInt
+    -- Stream.range 0 (sizeX * sizeY) |> Stream.map (read8 arr >> (x -> if x == 2 then 0 else 1)) |> fold! (+) 0
+    
+
+
+run2 = readFileUtf8 >> parse >> List.map recode >> allInfo >> (cases (i1, i2) -> (Info.points i1, Info.points i2)) |> delay
+run2' = readFileUtf8 >> parse >> List.map recode >> dig2 |> delay
+
+
+s2 = run2' sample
+i2 = run2' input
+
