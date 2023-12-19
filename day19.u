@@ -6,12 +6,14 @@ structural type Rule = { attr : Attribute, sign : Sign, value : Nat, decision : 
 structural type WorkFlow = {name: Text, rules: [Rule], default: Decision}
 structural type Item = {items : data.Array Nat}
 
-Item.get : Item -> Attribute ->{Exception} Nat
-Item.get it = (Item.items it |> data.Array.read) << cases 
+Attribute.index = cases 
     X -> 0
     M -> 1
     A -> 2
     S -> 3
+
+Item.get : Item -> Attribute ->{Exception} Nat
+Item.get it = (Item.items it |> data.Array.read) << index
 
 Rule.cmp : Rule -> Nat -> Nat -> Boolean
 Rule.cmp = Rule.sign >> cases 
@@ -82,6 +84,7 @@ accepted wfs =
 rating : Item -> Nat
 rating = Item.items >> Array.foldLeft (+) 0
 
+--<[Part 2]>--
 
 sample = FilePath "day19/sample.txt"
 input = FilePath "day19/input.txt"
@@ -91,105 +94,52 @@ run1 = readFileUtf8 >> parse >>  uncurry accepted >> List.map rating >> List.fol
 s1 = run1 sample
 i1 = run1 input
 
-structural type ItemRange = { items: data.ByteArray }
+at!! i = List.at! i |> delay >> Abort.toGenericException "list.at" i
 
-use data ByteArray
-write16be : data.ByteArray -> Nat -> Nat -> data.ByteArray
-write16be arr i n = 
-    high = n / 256
-    low = mod n 256
-    data.ByteArray.write8 arr i high |> (b -> data.ByteArray.write8 b (i + 1) low)
+upd : Nat -> [Nat] -> Nat -> ([Nat] -> {g} ()) -> {Exception, g} ()
+upd i arr x f = 
+    arr' = replace i x arr
+    i' = (i / 2) * 2
+    if at!! (i' + 1) arr' <= at!! i' arr then () else f arr'
 
-ItemRange.split : ItemRange -> Rule -> {Exception} (Optional ItemRange, Optional ItemRange)
-ItemRange.split ir rule = 
-    val  = Rule.value rule
-    arr = ItemRange.items ir
-    sign = Rule.sign rule
+ItemRange.split : [Nat] -> Rule -> ([Nat] -> {g} ()) -> ([Nat] -> {g} ()) -> {Exception, g} ()
+ItemRange.split arr = cases Rule attr sign val _ -> then_ else_ -> let 
+    i = index attr * 2
+    match sign with 
+        GT -> upd i arr (val + 1) then_ |> do upd (i + 1) arr val else_
+        LT -> upd (i + 1) arr (val - 1) then_ |> do upd i arr val else_
 
-    idx i = 
-        low = ByteArray.read16be arr i
-        high =  ByteArray.read16be arr (i + 2)
-        from v = Some (ItemRange (write16be arr i v))
-        to v = Some (ItemRange (write16be arr (i + 2) v))
-        match sign with 
-            GT | val < low -> (Some ir, None)
-               | val == low -> (from (val + 1), None) 
-               | val >= high -> (None, None)
-               | otherwise -> (from (val + 1), to val)
-            LT | val > high -> (Some ir, None)
-               | val == high -> (to (val - 1), None) 
-               | val <= low -> (None, None)
-               | otherwise -> (to (val - 1), from val)
+ItemRange.rating : [Nat] ->{Exception} Nat
+ItemRange.rating lst = 
+    of i = (at!! (i + 1) lst) + 1 - (at!! i lst)
+    of 0 * of 2 * of 4 * of 6
+    
+Optional.traverse_ o f = Optional.map f o |> ignore
 
-    match Rule.attr rule with 
-        X -> idx 0
-        M -> idx 4
-        A -> idx 8
-        S -> idx 12
-
-ItemRange.rating : ItemRange ->{Exception} Nat
-ItemRange.rating ir = 
-    arr = ItemRange.items ir
-    at i = ByteArray.read16be arr i
-    of i = at (i + 2) + 1 - at i
-    of 0 * of 4 * of 8 * of 12
-
-ItemRange.show : ItemRange -> Text
-ItemRange.show ir = 
-    use Text ++
-    arr = ItemRange.items ir
-    at i = ByteArray.read16be arr i |> Nat.toText
-    of i =  at i ++ " to " ++ at (i + 2) 
-    "{x: " ++ of 0 ++ ", m: " ++ of 4 ++ ", a: " ++ of 8 ++ ", s: " ++ of 12 ++ "}"
-
-
-
-ranges : [WorkFlow] -> ItemRange -> '{Stream ItemRange, Exception} ()
+ranges : [WorkFlow] -> [Nat] -> '{Stream [Nat], Exception} ()
 ranges wfs = 
-    wfm = List.map (WorkFlow.name &&& id) wfs |> Map.fromList
-    forName name = Map.get name wfm |> getOrBug ("unknown wf", name)
-    decide ir = cases 
-        Accept -> 
-            -- Debug.trace "accept" (show ir, ItemRange.rating ir)
-            emit ir
-        Reject -> 
-            -- Debug.trace "reject" (show ir)
-            ()
-        SendTo x -> run x ir
+    wfm = map (WorkFlow.name &&& id) wfs |> fromList
+    forName name = Map.get name wfm |> getOrElse' '(raiseGeneric "unknown wf" name)
+    decide = cases 
+        Accept -> emit
+        Reject -> const ()
+        SendTo x -> run x
 
-    act ir default = cases
-        (rule +: rules) -> 
-            (ok, next) = ItemRange.split ir rule
-            -- Debug.trace "split" (show ir, rule, ok |> map show, next |> map show)
-            match ok with 
-                Some ir' -> decide ir' (Rule.decision rule)
-                None -> ()       
-            match next with
-                Some ir' -> act ir' default rules
-                None -> () 
-        [] -> decide ir default 
-
-    run name = 
-        wf = forName name
-        default = WorkFlow.default wf
-        rules = WorkFlow.rules wf
-        ir -> act ir default rules
+    act rule continue ir = split ir rule (decide (Rule.decision rule)) continue
+    
+    run = forName >> cases WorkFlow _ rules default -> List.foldRight act (decide default) rules
     run "in" |> delay
 
-
-
-ItemRange.initial = ItemRange (List.range 0 4 |> List.flatMap '[0, 1, 4000 / 256, mod 4000 256] |> ByteArray.fromList)
-
-> catch do ItemRange.initial |> ItemRange.rating
-> pow 4000  4
+initial = replicate 4 '[1, 4000] |> join
 
 run2 = readFileUtf8 >> parse >> at1 
         >> flip ranges initial 
-        -- >> delay (Stream.foreach ((show &&& ItemRange.rating &&& emit) >> Debug.trace "accept"))
         >> Stream.map ItemRange.rating 
         >> fold! (+) 0 |> delay
 
+s2 = run2 sample >> (==) 167409079868000
+i2 = run2 input >> (==) 124078207789312
 
-> 919061735797000000 > 316132305330500000
-s2 = run2 sample
-i2 = run2 input
+> Map.fromList [(1, 1), (2, 2), (3, 3), (4, 4)]
+
+x = List.equals
