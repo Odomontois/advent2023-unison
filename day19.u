@@ -1,0 +1,92 @@
+
+structural type Decision = Accept | Reject | SendTo Text
+structural type Sign = GT | LT
+structural type Attribute = X | M | A | S
+structural type Rule = { attr : Attribute, sign : Sign, value : Nat, decision : Decision}
+structural type WorkFlow = {name: Text, rules: [Rule], default: Decision}
+structural type Item = {items : data.Array Nat}
+
+Item.get : Item -> Attribute ->{Exception} Nat
+Item.get it = (Item.items it |> data.Array.read) << cases 
+    X -> 0
+    M -> 1
+    A -> 2
+    S -> 3
+
+Rule.cmp : Rule -> Nat -> Nat -> Boolean
+Rule.cmp = Rule.sign >> cases 
+    GT -> (Nat.>)
+    LT -> (Nat.<)
+
+Rule.decide : Rule -> Item -> Optional Decision
+Rule.decide rule item = 
+    val = Item.get item (Rule.attr rule)
+    if Rule.cmp rule val (Rule.value rule)
+    then Some (Rule.decision rule)
+    else None
+
+parse.nameP = capture (some asciiLetter)
+parse.num = capture (some patterns.digit)
+parse.ruleP = Pattern.join [nameP, capture (chars "<>"), num, chars ":", nameP, comma]
+parse.comma = literal ","
+parse.wfP = Pattern.join [nameP, literal "{", some (capture ruleP), nameP, literal "}"]
+parse.assignmentP = Pattern.join [some asciiLetter, literal "=", num]
+parse.itemP = Pattern.join [literal "{", sepMany comma assignmentP, literal "}"]
+parse.attr = cases 
+        "x" -> X
+        "m" -> M
+        "a" -> A
+        "s" -> S
+        x -> raiseGeneric "bad attr" x
+parse.sign = cases
+        ">" -> GT
+        "<" -> LT
+        x -> raiseGeneric "bad sign" x
+parse.value x = Nat.fromText x |> getOrElse' '(raiseGeneric "bad value" x)
+parse.rule = captures ruleP >> cases 
+        [attrT, signT, valT, decT] -> Rule (attr attrT) (parse.sign signT) (parse.value valT) (parse.decision decT)
+        x -> raiseGeneric "bad rule" x
+
+parse.decision = cases
+        "A" -> Accept
+        "R" -> Reject
+        x -> SendTo x
+parse.workflow txt = captures wfP txt |> cases 
+       (name +: ruleT) :+ default -> WorkFlow name (List.map parse.rule ruleT) (parse.decision default)
+       x -> raiseGeneric "bad workflow" txt
+parse.item = captures itemP >> List.map parse.value >> Array.fromList >> Item
+
+parse : Text -> {Exception} ([WorkFlow], [Item])
+parse = lines >> List.split (Text.isEmpty) >> cases 
+        [workflows, items] -> (List.map workflow workflows, List.map item items)
+        x -> raiseGeneric "bad parse" x
+
+accepted : [WorkFlow] -> [Item] -> [Item]
+accepted wfs = 
+    wfm = List.map (WorkFlow.name &&& id) wfs |> Map.fromList
+    forName name = Map.get name wfm |> getOrBug ("unknown wf", name)
+    run item = 
+       act default = cases
+            (rule +: rules) -> 
+                match Rule.decide rule item with
+                    Some d -> d
+                    None -> act default rules                
+            [] -> default 
+
+       forName >> (WorkFlow.default &&& WorkFlow.rules) >> uncurry act >> cases
+            Accept -> true
+            Reject -> false
+            SendTo x -> run item x
+    List.filter (flip run "in")
+
+rating : Item -> Nat
+rating = Item.items >> Array.foldLeft (+) 0
+
+
+sample = FilePath "day19/sample.txt"
+input = FilePath "day19/input.txt"
+
+run1 = readFileUtf8 >> parse >>  uncurry accepted >> List.map rating >> List.foldLeft (+) 0 |> delay
+
+s1 = run1 sample
+i1 = run1 input
