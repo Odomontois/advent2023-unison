@@ -18,3 +18,5 @@ mutable.Array.fillWith n f =
     
 List.sumNats : List Nat -> Nat
 List.sumNats = List.foldLeft (Nat.+) 0
+
+at!! i = List.at! i |> delay >> Abort.toGenericException "list.at" i
