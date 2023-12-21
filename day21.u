@@ -1,0 +1,33 @@
+sample = FilePath "day21/sample.txt"
+input = FilePath "day21/input.txt"
+
+step: [Text] -> Int -> Int -> {Stream (Int, Int)} ()
+step map =
+    m = size map |> toInt
+    line i  = List.at i map |> Optional.getOrElse ""
+    n = line 0 |> size |> toInt
+    good x y = line (fromInt x) |> charAt (fromInt y) |> Optional.getOrElse ?. |> (c -> c != ?#)
+    check x y = when ((x >= +0 ) && (y >= +0) && (x < m) && (y < n) && good x y) '(emit (x, y))
+    x y -> let
+        check (x + +1) y
+        check (x - +1) y
+        check x (y + +1)
+        check x (y - +1)
+
+walk : [Text] -> [(Int, Int)] -> [(Int, Int)]
+walk = step >> uncurry >> foreach_  >> delay >> (f -> f >> toList! >> Set.fromList >> Set.toList)
+
+iter : (a -> a) -> a -> Nat -> a
+iter f x n = if n == 0 then x else iter f (f x) (n - 1)
+
+start : [Text] -> (Int, Int)
+start = 
+    List.indexed 
+        >> List.filterMap (cases (line, i) -> Text.indexOf "S" line |> Optional.map (j -> (Nat.toInt i, Nat.toInt j)))
+        >> List.head 
+        >> getOrBug "start not found"
+
+run1 x = readFileUtf8 >> lines >> (txt -> iter (walk txt) [start txt] x) >> size |> delay
+
+s1 = run1 6 sample
+i1 = run1 64 input

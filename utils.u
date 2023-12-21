@@ -20,3 +20,5 @@ List.sumNats : List Nat -> Nat
 List.sumNats = List.foldLeft (Nat.+) 0
 
 at!! i = List.at! i |> delay >> Abort.toGenericException "list.at" i
+
+fromInt = Nat.fromInt >> Optional.getOrElse 0

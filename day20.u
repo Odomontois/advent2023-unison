@@ -43,6 +43,12 @@ analyze addRx ls = if addRx then analyze false (ls :+ ["rx", "rx"]) else
 
 structural type Simulated = { next : Nat, lows : Nat, highs : Nat , rx: Boolean}
 
+ones : Nat -> [Nat]
+ones x = if x == 0 then [] else 
+    b = Nat.trailingZeros x
+    b +: ones (clearBit b x)
+
+
 putAll : Nat -> Boolean -> Nat -> [Item] -> [Item]
 putAll x high from ls = 
     if x == 0 then ls 
@@ -66,7 +72,7 @@ simulate initialState modules =
             highs' = if high then highs + 1 else highs
             (Module _ k ins outs) =  at!! to modules
             continue high' trigger = 
-                state' = changeBit to high' state 
+                state' = if (k === Flip) then changeBit to high' state else state
                 q' = if trigger then putAll outs high' to q else q
                 go lows' highs' state' q'
             ignore = ' (go lows' highs' state q)
@@ -84,10 +90,27 @@ simulate initialState modules =
         [] -> Simulated state lows highs false
     go 0 0 initialState [Item false start start]
     
-loop : Nat -> [Module] -> (Nat, Nat, Nat, Nat)
-loop count modules = 
+loop : Boolean -> Nat -> [Module] ->  (Nat, Nat, Nat, Nat)
+loop checkLoops count modules = 
+    use mutable.Array read write freeze!
+    Scope.run do
+    loops = dependencies modules |> clean |> List.indexed
+    n = size loops
+    arr = Scope.arrayOf NatSet.empty n
+    insertState state = cases (l, i) -> let
+        cur = read arr i
+        mappedState = Nat.and state l
+        if NatSet.contains mappedState cur then true else
+        write arr i (NatSet.insert mappedState cur)
+        false 
+    result = do
+        xs = freeze! arr |> Array.toList |> map NatSet.size |> tap "loop sizes"
+        (0, 0, 0, xs |> List.foldLeft (*) 1)
+        
+    checkState state = List.all (insertState state) loops
     go state i lows highs = 
         if i == count then (i, lows, highs, lows * highs) else 
+        if checkLoops && checkState state then result () else 
         when (mod i 1000 == 0) '(Debug.trace "sims" i)
         (Simulated next addLows addHighs rx) = simulate state modules -- |> Debug.tap "simulated\n"
         if rx then (i, 0, 0, 0) else
@@ -102,7 +125,7 @@ loop count modules =
 
 run1 = readFileUtf8 >> capt >> analyze false
         -- >> simulate 0 
-        >> loop 1000
+        >> loop false 1000
         |> delay
 
 s11 = run1 sample1
@@ -111,7 +134,41 @@ i1 = run1 input
 
 run2 = readFileUtf8 >> capt >> analyze true
         -- >> simulate 0 
-        >> loop 1000000
+        >> loop false 1000000 
         |> delay
 
 i2 = run2 input
+
+
+dependencies: [Module] -> {Exception} [Nat]
+dependencies mods = 
+    use mutable.Array read write freeze!
+    Scope.run do
+        arr = Scope.arrayOf 0 (size mods)
+        walk b i = 
+            c = read arr i
+            when (bit b c == 0) do
+                write arr i (setBit b c)
+                at!! i mods 
+                    |> Module.outputs 
+                    |> ones 
+                    |> foreach_ (j -> walk b j)
+        mods |> indexed |> foreach_ (cases (mod, i) -> when (kind mod === Flip) do walk i i)
+        freeze! arr |> toList |> distinct
+
+clean : [Nat] -> [Nat]
+clean = filter ((!=) 0) >> (xs -> let
+        top = maximum xs |> Optional.getOrElse 0
+        if (size xs > 1 ) && (List.all (b -> and top b == b) xs) then deleteFirst ((==) top) xs else xs)
+
+
+run3 f = do readFileUtf8 f |> capt |> analyze true |> dependencies |> clean |> map ones
+
+i3 = run3 input
+s3 = run3 sample2
+
+run4 f = do readFileUtf8 f |> capt |> analyze true |> loop true 100000000 
+s41 = run4 sample1
+s42 = run4 sample2
+
+i4 = run4 input
