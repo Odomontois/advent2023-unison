@@ -20,14 +20,139 @@ walk = step >> uncurry >> foreach_  >> delay >> (f -> f >> toList! >> Set.fromLi
 iter : (a -> a) -> a -> Nat -> a
 iter f x n = if n == 0 then x else iter f (f x) (n - 1)
 
-start : [Text] -> (Int, Int)
+start : [Text] -> (Nat, Nat)
 start = 
     List.indexed 
-        >> List.filterMap (cases (line, i) -> Text.indexOf "S" line |> Optional.map (j -> (Nat.toInt i, Nat.toInt j)))
+        >> List.filterMap (cases (line, i) -> Text.indexOf "S" line |> Optional.map (j -> (i, j)))
         >> List.head 
         >> getOrBug "start not found"
 
-run1 x = readFileUtf8 >> lines >> (txt -> iter (walk txt) [start txt] x) >> size |> delay
+toInts = cases (x, y) -> (Nat.toInt x, Nat.toInt y)
+
+text = readFileUtf8 >> lines 
+run1 x = text >> (txt -> iter (walk txt) [toInts (start txt)] x) >> size |> delay
 
 s1 = run1 6 sample
 i1 = run1 64 input
+
+genSimulate: Nat -> [Text] -> {Scope s, Exception} mutable.ByteArray {Scope s}
+genSimulate steps data = 
+    use mutable.ByteArray read8 write8
+    (x, y) = start data |> toInts
+    n = size data
+    n' = toInt n
+    arr = Scope.byteArrayOf 0 (n * n)
+    data |> indexed |> foreach_ ( cases (line, i) ->
+        line |> toCharList |> indexed |> foreach_ (cases (c, j) ->
+            write8 arr (i * n + j) (if c == ?# then 3 else 2)))
+    go i ps = if i == 0 then () else 
+        mark = mod i 2
+        step x y = 
+            if (x < +0) || (y < +0) || (x >= n') || (y >= n') then () else 
+            cur = (x * n' + y) |> fromInt |> read8 arr
+            if (cur == mark) || (cur == 3) then () else 
+            write8 arr (fromInt (x * n' + y)) mark
+            emit (x, y)
+
+        delay (List.foreach ps) (cases (x, y) -> let
+            step (x + +1) y
+            step (x - +1) y
+            step x (y + +1)
+            step x (y - +1)
+        ) |> toList! |> go (i - 1)
+    go steps [(x, y)]
+    arr
+
+
+simulate : Text  -> Nat -> [Text] -> [Text]
+simulate code steps data = Scope.run do
+    n = size data
+    arr = genSimulate steps data
+    List.range 0 n |> List.map (i -> 
+        List.range 0 n |> List.map (j -> 
+            charAt (read8 arr (i * n + j)) code |> Optional.getOrElse ?\s
+        ) |> fromCharList)
+
+
+simulateResult : Nat -> [Text] -> [[Nat]]
+simulateResult z data = Scope.run do
+    n = size data
+    steps = n * z + (n / 2)
+    zz = 2 * z + 1
+    big = multiply zz zz data
+    arr = genSimulate steps big 
+    calcWithin xs ys xe ye = 
+        Stream.range (xs * n) (xe * n) |> Stream.flatMap (x ->
+            Stream.range (ys * n) (ye * n) |> Stream.filter (y -> 
+                read8 arr (x * n * zz + y) == 1
+            ) |> Stream.map (const 1) |> force
+        ) |> fold! (+) 0
+    initialize zz (x -> 
+        initialize zz (y -> 
+            calcWithin x y (x + 1) (y + 1)
+        ))
+    
+
+
+putAt : Text -> Nat -> Nat -> [Text] -> [Text]
+putAt c x y = updateAt (line -> Text.take y line ++ c ++ Text.drop (y + 1) line) x
+
+
+multiply a b txts = 
+    (x, y) = start txts 
+    n = size txts
+    x' = n * (a / 2) + x
+    y' = n * (b / 2) + x
+    txts |> putAt "." x y |> List.map (Text.repeat a) |> List.fill b |> List.join |> putAt "S" x' y'
+
+
+output = FilePath "day21/output.txt"
+run2 a b n = 
+    text
+        >> (txts -> let
+            Debug.trace "size" (size txts)
+            txts ) 
+        >> multiply a b
+        >> (simulate "@~.#" n) 
+        >> Text.join "\n" 
+        >> writeFileUtf8 output 
+        |> delay 
+
+s2 = run2 15 15 50 sample
+i2 = run2 3 3 (131 + 65) input
+
+steps = 26501365
+
+z = steps / 131
+
+> steps / 131
+
+> mod steps 131
+
+
+i3 = do text input |> simulateResult 2
+
+megaCalc steps  data = 
+    results = simulateResult 2 data
+    match results with
+        [[0, nwSmall, north, neSmall, 0],
+         [nwSmall', nwBig, inside, neBig, neSmall'],
+         [west, inside', middle, inside'2, east],
+         [swSmall, swBig, inside'3, seBig, seSmall],
+         [0, swSmall', south, seSmall', 0]] -> 
+            assertEquals nwSmall nwSmall' |> ignore
+            assertEquals neSmall neSmall' |> ignore
+            assertEquals swSmall swSmall' |> ignore
+            assertEquals seSmall seSmall' |> ignore
+            assertEquals inside inside' |> ignore
+            assertEquals inside inside'2 |> ignore
+            assertEquals inside inside'3 |> ignore
+            (north + west + east + south)
+                + (steps * (nwSmall + neSmall + swSmall + seSmall))
+                + ((steps - 1) * (nwBig + neBig + swBig + seBig))
+                + (middle * (steps - 1) * (steps - 1))
+                + (inside * steps * steps)
+
+        _ -> bug "oh well" ()
+
+i4 = do text input |> megaCalc (steps / 131)
