@@ -135,11 +135,11 @@ i3 = do text input |> simulateResult 2
 megaCalc steps  data = 
     results = simulateResult 2 data
     match results with
-        [[0, nwSmall, north, neSmall, 0],
-         [_, nwBig, inside, neBig, _],
-         [west, _, middle, _, east],
-         [swSmall, swBig, _, seBig, seSmall],
-         [0, _, south, _, 0]] -> 
+        [[0      , nwSmall , north , neSmall, 0      ],
+         [_      , nwBig   , inside, neBig  , _      ],
+         [west   , _       , middle, _      , east   ],
+         [swSmall, swBig   , _     , seBig  , seSmall],
+         [0      , _       , south , _      , 0      ]] -> 
             (north + west + east + south)
                 + (steps * (nwSmall + neSmall + swSmall + seSmall))
                 + ((steps - 1) * (nwBig + neBig + swBig + seBig))
