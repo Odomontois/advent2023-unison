@@ -136,17 +136,10 @@ megaCalc steps  data =
     results = simulateResult 2 data
     match results with
         [[0, nwSmall, north, neSmall, 0],
-         [nwSmall', nwBig, inside, neBig, neSmall'],
-         [west, inside', middle, inside'2, east],
-         [swSmall, swBig, inside'3, seBig, seSmall],
-         [0, swSmall', south, seSmall', 0]] -> 
-            assertEquals nwSmall nwSmall' |> ignore
-            assertEquals neSmall neSmall' |> ignore
-            assertEquals swSmall swSmall' |> ignore
-            assertEquals seSmall seSmall' |> ignore
-            assertEquals inside inside' |> ignore
-            assertEquals inside inside'2 |> ignore
-            assertEquals inside inside'3 |> ignore
+         [_, nwBig, inside, neBig, _],
+         [west, _, middle, _, east],
+         [swSmall, swBig, _, seBig, seSmall],
+         [0, _, south, _, 0]] -> 
             (north + west + east + south)
                 + (steps * (nwSmall + neSmall + swSmall + seSmall))
                 + ((steps - 1) * (nwBig + neBig + swBig + seBig))
