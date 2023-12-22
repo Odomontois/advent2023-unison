@@ -42,6 +42,7 @@ removeList : [Brick] -> [Boolean]
 removeList brs = 
     sups = zip brs <| supportedList brs
     brs |> map (br -> sups |> filter (cases (b, c) -> (c == 1) && supports br b) |> isEmpty)
+    
 
 check = cases Brick (Point xs ys zs) (Point xe ye ze) -> (xs <= xe) && (ys <= ye) && (zs <= ze)
 
@@ -56,3 +57,29 @@ run f = f >> parse
 s1 = run sample
 
 i1 = run input
+
+desintegrate: [Brick] -> [Nat]
+desintegrate bs = 
+    ups = bs |> map (b -> bs |> indexed |> filter (at1 >> supports b) |> map at2)
+    downs = bs |> map (b -> bs |> filter (b' -> supports b' b) |> size)
+
+    ruin acc ds  = cases 
+        i +: rest -> 
+            (ds', q') = at i ups |> getOrElse [] |> List.foldLeft check (ds, rest)
+            ruin (acc + 1) ds' q'
+        _ -> acc - 1
+
+    check =  cases (ds, q), i -> 
+        ds' = updateAt (decrement) i ds
+        (ds', if at i ds' === Some 0 then q :+ i else q)
+
+    range 0 (size bs) |> map (singleton >> ruin 0 downs)
+
+run2 f = f >> parse 
+            >> fallAll 
+            >> desintegrate 
+            >> tap "desintegrate"
+            >> foldLeft (+) 0
+
+s2 = run2 sample
+i2 = run2 input
