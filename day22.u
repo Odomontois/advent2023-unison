@@ -1,0 +1,58 @@
+file = (t -> "day22/" ++ t ++ ".txt") >> FilePath >> readFileUtf8 |> delay
+
+sample = file "sample"
+input = file "input"
+
+structural type Point = {x : Nat, y : Nat, z : Nat}
+structural type Brick = {from: Point, to: Point}
+
+parse: Text -> {} [Brick]
+parse = 
+    nat = fromText >> Optional.toAbort
+    point = split ?, >> cases 
+        [x, y, z] -> Point (nat x) (nat y) (nat z)
+        _ -> abort
+    line = split ?~ >> cases 
+        [from, to] -> Brick (point from) (point to)
+        _ -> abort
+    lines >> map line |> delay >> toDefault! '(bug "can't parse")
+
+intersects : Brick -> Brick -> Boolean
+intersects b b' = 
+    isOn f = (f (from b) <= f (to b')) && (f (from b') <= f (to b))
+    isOn x && isOn y
+
+fall : [Brick] -> Brick -> [Brick]
+fall brs = cases b@(Brick pf pt) -> 
+    goodZ = brs |> filter (intersects b) |> map (to >> z) |> maximum |> Optional.getOrElse 0
+    fromZ = Nat.min (z pf) (goodZ + 1)
+    toZ = z pt - (z pf - fromZ)
+    brs :+ Brick (z.set fromZ pf) (z.set toZ pt)
+
+fallAll : [Brick] -> [Brick]
+fallAll = sortBy (from >> z) >> foldLeft fall []
+
+supports : Brick -> Brick -> Boolean
+supports b b' = ((z (to b) + 1) == (z (from b'))) && intersects b b'
+
+supportedList : [Brick] -> [Nat]
+supportedList brs = brs |> map (br -> filter (b -> supports b br) brs |> size)
+
+removeList : [Brick] -> [Boolean]
+removeList brs = 
+    sups = zip brs <| supportedList brs
+    brs |> map (br -> sups |> filter (cases (b, c) -> (c == 1) && supports br b) |> isEmpty)
+
+check = cases Brick (Point xs ys zs) (Point xe ye ze) -> (xs <= xe) && (ys <= ye) && (zs <= ze)
+
+run f = f >> parse 
+            -- >> Debug.tap "initial" 
+            >> fallAll 
+            -- >> Debug.tap "fallen" 
+            >> removeList 
+            >> List.filter id 
+            >> size
+
+s1 = run sample
+
+i1 = run input
