@@ -83,3 +83,6 @@ run2 f = f >> parse
 
 s2 = run2 sample
 i2 = run2 input
+
+foo: '{Throw Nat, Throw Text} Text
+foo = '""

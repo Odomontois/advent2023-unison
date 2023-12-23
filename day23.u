@@ -1,0 +1,75 @@
+file = s -> "day23/" ++ s ++ ".txt" |> FilePath |> readFileUtf8 |> lines
+input = delay file "input"
+sample = delay file "sample"
+
+
+structural type Road ref = Fork ref ref | Path Nat ref | Goal
+
+Road.map : (i ->{g} o) -> Road i ->{g} Road o
+Road.map f = cases 
+    Fork l r -> Fork (f l) (f r)
+    Path n r -> Path n (f r)
+    Goal -> Goal
+
+byDir : Nat -> Nat -> Char -> (Nat, Nat)
+byDir x y = cases
+    ?^ -> (x - 1, y)
+    ?v -> (x + 1, y)
+    ?< -> (x, y - 1)
+    ?> -> (x, y + 1)
+    _ -> (x, y)
+
+steps = "v^<>" |> toCharList
+
+structural type WalkState r = {start: r, land: Map r (Road r)}
+WalkState.add p = cases WalkState s m -> WalkState s (insert s p m)
+
+parse : [Text] -> [Road Nat]
+parse landscape = 
+    eq x y x' y' = (x == x') && (y == y')
+    goTo xc yc xp yp dir = 
+        (x, y) = byDir xc yc dir
+        if (eq x y xp yp) || (eq x y xc yc) then None else 
+        l = List.at x landscape |> flatMap (charAt y) |> getOrElse ?#
+        if l == ?. then Some (x, y, true)
+        else if l == dir then 
+            (x', y') = byDir x y dir
+            Some (x', y', false)
+        else  None
+    walkTo x y ws = if land ws |> contains (x, y) then ws else start.set (x, y) ws |> walk x y x y 0
+    n = landscape |> size
+    walk x y xp yp l ws =
+        step = goTo x y xp yp
+        nexts = steps |> filterMap step
+        match nexts with
+            [(x', y', true)] -> 
+                walk x' y' x y (l + 1) ws
+            [(x', y', false)] -> 
+                ws |> add (Path l (x', y'))|> walkTo x' y' 
+            [(x1, y1, false), (x2, y2, false)] | l == 0 -> 
+                ws |> add (Fork (x1, y1) (x2, y2)) |> walkTo x1 y1 |> walkTo x2 y2
+            [] | (x == (n - 1)) && (y == (n - 2)) -> 
+                ws |> add (Path l (x, y)) |> start.set (x, y) |> add Goal
+            n' -> bug ("une xpected nexts" ,n', ws)
+    res = walkTo 0 1 (WalkState (0, 1) empty) |> land |> toList -- |> Debug.tap "res"
+    idx = res |> List.map at1 |> indexed |> Map.fromList
+    res |> List.map (at2 >> map (k -> get k idx |> getOrBug ("missing", k)))
+
+hasLoop : [Road Nat] -> Boolean
+hasLoop lst = 
+    elems = Array.fromList lst
+    get i = at i elems |> getOrBug ("missing", i)
+    hasLoop seen i = (NatSet.contains i seen) || ( let
+        seen' = insert i seen
+        match get i with
+            Fork l r -> hasLoop seen' l || hasLoop seen' r
+            Path _ r -> hasLoop seen' r
+            Goal -> false
+    )
+    hasLoop empty 0
+
+
+
+p1 = parse >> hasLoop
+s1 = sample >> p1
+i1 = input >> p1
