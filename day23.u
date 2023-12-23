@@ -51,14 +51,16 @@ parse landscape =
             [] | (x == (n - 1)) && (y == (n - 2)) -> 
                 ws |> add (Path l (x, y)) |> start.set (x, y) |> add Goal
             n' -> bug ("une xpected nexts" ,n', ws)
-    res = walkTo 0 1 (WalkState (0, 1) empty) |> land |> toList -- |> Debug.tap "res"
+    res = walkTo 0 1 (WalkState (0, 1) empty) |> land |> toList |> Debug.tap "res"
     idx = res |> List.map at1 |> indexed |> Map.fromList
     res |> List.map (at2 >> map (k -> get k idx |> getOrBug ("missing", k)))
 
+getter : [Road Nat] -> Nat -> Road Nat
+getter = Array.fromList >> (arr i -> Array.at i arr |> getOrBug ("missing", i))
+
 hasLoop : [Road Nat] -> Boolean
-hasLoop lst = 
-    elems = Array.fromList lst
-    get i = at i elems |> getOrBug ("missing", i)
+hasLoop roads = 
+    get = getter roads
     hasLoop seen i = (NatSet.contains i seen) || ( let
         seen' = insert i seen
         match get i with
@@ -68,8 +70,25 @@ hasLoop lst =
     )
     hasLoop empty 0
 
+longestPath : [Road Nat] -> Nat
+longestPath roads =
+    use mutable.Array
+    get = getter roads
+    Scope.run do
+    res = Scope.arrayOf 0 (List.size roads)
+    longest i = 
+        match read res i with
+        0 -> 
+            r = match get i with
+                Fork l r -> Nat.max (longest l) (longest r) + 2
+                Path x r -> longest r + x + 2
+                Goal -> 0
+            write res i r
+            r
+        x -> x 
+    longest 0 - 2
 
 
-p1 = parse >> hasLoop
+p1 = parse >> longestPath
 s1 = sample >> p1
 i1 = input >> p1
