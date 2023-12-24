@@ -3,7 +3,7 @@ input = delay file "input"
 sample = delay file "sample"
 
 
-structural type Road ref = Fork ref ref | Path Nat ref | Goal
+unique type Road ref = Fork ref ref | Path Nat ref | Goal
 
 Road.map : (i ->{g} o) -> Road i ->{g} Road o
 Road.map f = cases 
@@ -51,11 +51,11 @@ parse landscape =
             [] | (x == (n - 1)) && (y == (n - 2)) -> 
                 ws |> add (Path l (x, y)) |> start.set (x, y) |> add Goal
             n' -> bug ("une xpected nexts" ,n', ws)
-    res = walkTo 0 1 (WalkState (0, 1) empty) |> land |> toList |> Debug.tap "res"
+    res = walkTo 0 1 (WalkState (0, 1) empty) |> land |> toList 
     idx = res |> List.map at1 |> indexed |> Map.fromList
     res |> List.map (at2 >> map (k -> get k idx |> getOrBug ("missing", k)))
 
-getter : [Road Nat] -> Nat -> Road Nat
+getter : [a] -> Nat -> a
 getter = Array.fromList >> (arr i -> Array.at i arr |> getOrBug ("missing", i))
 
 hasLoop : [Road Nat] -> Boolean
@@ -92,3 +92,115 @@ longestPath roads =
 p1 = parse >> longestPath
 s1 = sample >> p1
 i1 = input >> p1
+
+
+info : [Road Nat] -> ()
+info roads = 
+    counts = roads 
+                |> flatMap (cases 
+                    Path _ i -> [(i, 1)]
+                    Fork l r -> [(l, 1), (r, 1)]
+                    _ -> []) 
+                |> Map.fromListWith (+)
+    count i = get i counts |> Optional.getOrElse 0
+    withCount = roads |> List.indexed |> List.map (cases (r, i) -> (r, count i))
+    withCount |> filter (cases 
+                            (Fork _ _, 1) -> true 
+                            _ -> false
+                        ) |> size |> trace "fwtriples"
+    withCount |> filter (cases 
+                            (Path _ _, 2) -> true
+                            _ -> false
+                        ) |> size |> trace "bktriples"
+    ()
+
+unique type Edge = {from: Nat, to: Nat, dist: Nat}
+
+edges : [Road Nat] -> [Edge]
+edges roads = 
+    walkWf x i s = at i roads |> getOrBug ("walkWf", x, i) |> cases 
+        Path 0 j -> Edge s i (x + 1)
+        Fork l r -> Edge s i (x + 1)
+        Path d j ->  walkWf (x + d + 1) j s
+        Goal -> Edge s i (x - 1)
+
+    roads 
+        |> indexed 
+        |> flatMap ( cases 
+            (Path d i, 0) -> [walkWf 0 0 0]
+            (Path 0 i, j) -> [walkWf 2 i j]
+            (Path _ _, _) -> []
+            (Fork l r, j) -> [walkWf 2 l j, walkWf 2 r j]
+            (Goal, end) -> [])
+        |> List.sort
+
+compact : [Edge] -> [Edge]
+compact edges = 
+    m = edges |> flatMap ( cases Edge i j _ -> [i, j]) |> Set.fromList |> Set.toList |> indexed |> Map.fromList
+    get i = Map.get i m |> getOrBug ("missing", i)
+    edges |> List.map (cases Edge i j d -> Edge (get i) (get j) d)
+    
+
+unique type Adj = {edge: Nat, to: Nat, dist: Nat}    
+adj : [Edge] -> [[Adj]]
+adj  =  indexed 
+            >> flatMap (cases (Edge i j d, e) -> [(i, [Adj e j d]), (j, [Adj e i d])]) 
+            >> Map.fromListWith (++)
+            >> Map.values
+
+
+
+
+maxDist : [Edge] -> Nat
+maxDist edges = 
+    use Nat max
+    use mutable.Array read write
+    graph = adj edges 
+    trace "graph" (indexed graph)
+    g = getter graph
+
+
+    fill start = 
+        Scope.run do
+            cache = Scope.arrayOf [] (List.size graph)
+
+            go seen i dist k = 
+                nm = read cache i
+                nm' = (seen, dist) +: nm
+                write cache i nm'
+                if k == 0 then () else
+                g i 
+                    |> List.filter (Adj.to >> (j -> bit j seen == 0)) 
+                    |> foreach_ cases (Adj e x d) -> go (setBit i seen) x (d + dist) (k - 1) 
+
+            go 0 start 0 17
+
+            Array.freeze! cache |> Array.toList
+
+    arrStart = fill 0
+    arrEnd = fill (size graph - 1)
+    info : [[(Nat, a)]] -> [(Nat, Nat)]
+    info = List.map (xs -> (List.size xs, List.map at1 xs |> NatSet.fromList |> NatSet.size))
+    
+    Debug.trace "generated" (info arrStart, info arrEnd)
+    calc: [(Nat, Nat)] -> [(Nat, Nat)] -> Promise Nat
+    calc fs fe = 
+        promise = Promise.new ()
+        _ = fork do
+            x = List.foldLeft (cases x, (m1, d1) -> 
+                        List.foldLeft (cases x', (m2, d2) -> 
+                            if and m1 m2 == 0 then max (d1 + d2) x' else x') x fe) 0 fs
+            write_ promise x
+        promise
+
+    List.zipWith calc arrStart arrEnd 
+        |> List.map Promise.read                      
+        |> List.maximum
+        |> Optional.getOrElse 0
+        
+
+
+p2 = parse >> edges >> compact >> maxDist
+
+s2 = sample >> p2
+i2 = input >> p2
