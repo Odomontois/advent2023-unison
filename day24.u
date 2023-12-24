@@ -1,0 +1,60 @@
+
+unique type Input = { vs: [(V3, V3)], from: Float, to: Float }
+
+
+read : Text -> Float -> Float -> '{IO, Exception} Input
+read s f t = do FilePath ("day24/" ++ s ++ ".txt") |> readFileUtf8 |> parse |> (vs -> Input vs f t)
+
+unique type V3 = { x : Float, y : Float, z : Float }
+parse : Text -> [(V3, V3)]
+parse = 
+    float = Text.dropWhile (isSpace) >> Text.dropRightWhile (isSpace) 
+                >> (s -> Float.fromText s |> getOrBug ("bad int", s))
+    v3 = Text.split ?, >> cases 
+        [x, y, z] -> V3 (float x) (float y) (float z)
+        s -> bug ("bad vec 3", s)
+    lines >> map (Text.split ?@) >> map (cases 
+        [p, v] -> (v3 p, v3 v)
+        s -> bug ("bad line", s)
+    )
+    
+
+sample = read "sample" +7.0 +27.0
+input = read "input" +2e14 +4e14
+
+intersection : (V3, V3) -> (V3, V3) -> Either  Text (Float, Float)
+intersection = cases (p1, v1), (p2, v2) -> let
+--    trace "for" ((p1, v1), (p2, v2))
+   q  = (x v2 * y v1) - (y v2 * x v1) -- |> tap "q"
+   if q == 0.0 then Left "parallel"
+   else 
+        dx = (x p1 - x p2) -- |> tap "dx"
+        dy = (y p1 - y p2)  -- |> tap "dy"
+        b = ((dx * y v1) - (dy * x v1)) / q -- |> tap "b"
+        a = ((dx * y v2) - (dy * x v2)) / q -- |> tap "a"
+        if (a < 0.0) && (b < 0.0) then Left "both in the past"
+        else if a < 0.0 then Left "p1 in the past"
+        else if b < 0.0 then Left "p2 in the past"
+        else 
+            -- trace "p1" (a * x v1 + x p1, a * y v1 + y p1)
+            -- trace "p2" (b * x v2 + x p2, b * y v2 + y p2)
+            Right (b * x v2 + x p2, b * y v2 + y p2)
+
+
+
+run1 ip = 
+    (f, t) = (from ip, to ip)
+    inside u = (f <= u) && (u <= t)
+    res = vs ip |> allPairs |> List.map (uncurry intersection) 
+                |> List.map (Either.flatMapRight (cases p@(x, y) -> 
+                    s = evalToText (x, y)
+                    if not (inside x) then Left ("x outside " ++ s)
+                    else if not (inside y) then Left ("y outside " ++ s)
+                    else Right (x, y)
+                ))
+                |> tap "results" 
+    good = rights res  -- |> tap "good"
+    size good
+
+s1 = sample >> run1
+i1 = input  >> run1
