@@ -1,0 +1,156 @@
+file name = do ("day25/" ++ name Text.++ ".txt") |> FilePath |> readFileUtf8 |> pars
+
+pars : Text -> [[Nat]]
+pars txt = 
+    toDefault! '(bug ("can't parse", txt)) do 
+    ls = Text.lines txt 
+    segs = List.map (segmentBy (isLetter)) ls
+    kvs = List.map (nonempty >> (head &&& tail)) segs |> Map.fromList
+    revs  = toList kvs |> flatMap (cases (h, t) -> t |> List.map (x -> (x, [h]))) 
+                       |> Map.fromListWith (++)
+    full = Map.unionWith (++) kvs revs
+    ixskeys = keys full |> indexed  |> Map.fromList 
+    -- trace "keys" (toList ixskeys)
+    byKey k =  Map.get k ixskeys |> toAbort
+    values full |> List.map (List.map byKey)
+
+unique type Down = {up : Nat, elems: [Nat], seen: NatMap Nat}
+
+
+
+-- Down.add : Nat -> Down -> Down
+-- Down.add = (+:) >> elems.modify
+
+components : [[Nat]] -> {Exception} [[Nat]]
+components graph = 
+    down : Nat -> Nat -> Nat -> Down -> {Exception, Stream [Nat]} Down
+    down from l i d = 
+        (Down up es seen) = d
+        match NatMap.get i seen with 
+        Some u -> up.modify (Nat.min u) d
+        None -> 
+        d1 = Down l [i] (NatMap.insert i l seen)
+        downs = at!! i graph
+        child ds j = if j == from then ds else down i (l + 1) j ds
+        (Down up' es' seen') = List.foldLeft child d1 downs
+        if up' >= l then 
+            emit es'
+            Down l es seen'
+        else Down (Nat.min up up') (es ++ es') seen'
+
+    toList! do down 0 0 0 (Down 0 [] NatMap.empty)
+
+
+structural type Edge = {cost: Nat, to: Nat}
+structural type Vx = {edges: [Edge], vertices: [Nat]}
+
+structural type State = {queue : Map Edge (), weight : NatMap Nat, pool : NatSet}
+
+add : State -> Edge -> State
+add = cases s@(State q w p), e@(Edge c v) ->
+    if NatSet.contains v p then s else
+    match NatMap.get v w with
+    Some x -> 
+        x' = x + c
+        q' = q |> Map.delete (Edge x v) |> Map.insert (Edge x' v) ()
+        w' = NatMap.insert v x' w   
+        State q' w' p 
+    None -> 
+        q' = Map.insert e () q
+        w' = NatMap.insert v c w
+        State q' w' p
+
+phaseCutOff: [Vx] -> {Exception} (Nat, Nat, Nat)
+phaseCutOff graph = 
+    match List.filter (not << isEmpty << vertices) graph with 
+    [] -> bug "empty graph"
+    (Vx first _ ) +: xs ->
+
+    go last = cases (State q w p) ->
+        if Map.size q == 1 then result last q else 
+        ((Edge c x, ()), q') = Abort.toBug do breakOffMax! q
+        pool' = NatSet.insert x p
+        w' = NatMap.delete x w
+        state' = State q' w' pool'
+        state'' = at!! x graph |> edges |> List.foldLeft add state'
+        
+        go x state''
+
+    result prev q = 
+        match Map.keys q with 
+            [Edge cost last] -> (prev, last, cost)
+            m -> raiseGeneric "strange final map" m
+
+    startQueue = first |> map (e -> (e, ())) |> Map.fromList
+    startWeights = first |> map (e -> (to e, cost e)) |> NatMap.fromList
+    startPool = NatSet.fromList [0]
+    initial = State startQueue startWeights startPool
+
+    go 0 initial
+
+merge: Nat -> Nat -> [Vx] -> [Vx]
+merge i j graph = 
+    (Vx ei vi) = at!! i graph
+    (Vx ej vj) = at!! j graph 
+    ess = (ei ++ ej) 
+            |> List.filterMap (cases Edge c x -> if (x != i) && (x != j) then Some (x, c) else None)
+            |> Map.fromListWith (+) 
+            |> Map.toList
+            |> List.map (cases (x, c) -> Edge c x)
+    newV = Vx ess (vi ++ vj)
+    fixEdges es = 
+        (to, other) = List.partition (cases Edge c x -> (x == j) || (x == i)) es
+        match to with
+        [Edge x _, Edge y _] -> other :+ (Edge (x + y) i)
+        [Edge x k] | k == j -> other :+ (Edge x i) 
+                   | k == i -> es 
+                   | otherwise -> bug ("bad fix single edge", es)
+        [] -> es
+        other -> bug ("bad fix", other)
+    fix k vx = if (k == j) || (k == i) then vx else edges.modify fixEdges vx
+    graph 
+        |> List.mapIndexed fix
+        |> replace i newV 
+        |> replace j (Vx [] []) 
+
+loop : Nat -> [Vx] -> (Nat, Nat, Nat)
+loop i graph = if i == 1 then (0, 0, 0) else
+    (a, b, c) = phaseCutOff graph
+    trace "merge" (a, b, c)
+    if (c == 3) then
+        bsize = at!! b graph |> vertices |> List.size
+        full = graph |> List.foldLeft (x v -> v |> vertices |> List.size |> (+) x) 0
+        rest = full - bsize
+        (bsize, rest, bsize * rest)        
+    else
+        graph' = merge a b graph -- |> tap "merge"
+        loop (i - 1) graph'
+
+
+graph : [[Nat]] -> [Vx]
+graph es = 
+    edges = es |> List.map (List.map (Edge 1))
+    vs = initialize (List.size es) (i -> [i])
+    List.zipWith Vx edges vs
+
+run1 f = do
+    es = f ()
+    g = graph es -- |> tap "graph"
+    -- trace "indexed" (List.indexed es)
+    -- (a, b, c) = phaseCutOff g |> tap "cutoff1 "
+    -- g' = merge a b g |> tap "phase1"
+    -- (a', b', c') = phaseCutOff g' |> tap "cutoff2"
+    -- merge a' b' g'
+    loop (size g - 1) g
+
+
+
+sample = file "sample"
+
+input = file "input"
+
+s1 = run1 sample
+
+i1 = run1 input
+
+
